@@ -112,11 +112,15 @@ def inspect_tabular_evidence(
 class TabularJointEvidence:
     """Load arbitrary-joint CSV/Parquet evidence through a locked binding spec."""
 
-    def __init__(self, spec: BoundEvidenceSpec | str | Path, *, verify_files: bool = True):
+    def __init__(
+        self, spec: BoundEvidenceSpec | str | Path, *, verify_files: bool = True, inspection_only: bool = False
+    ):
         self.spec = BoundEvidenceSpec.read(spec) if isinstance(spec, (str, Path)) else spec
         if not isinstance(self.spec, BoundEvidenceSpec):
             raise TypeError("spec must be a BoundEvidenceSpec or a path to one")
-        self.spec.assert_ready()
+        self.inspection_only = inspection_only
+        if not inspection_only:
+            self.spec.assert_ready()
         self.uri = self.spec.root
         self.revision = self.spec.revision
         self.root = Path(self.spec.root).expanduser().resolve()
@@ -183,6 +187,8 @@ class TabularJointEvidence:
             "sample_rates_hz": {signal: float(np.median(values)) for signal, values in rates.items() if values},
             "missing_by_episode": missing_by_episode,
             "required_signals_present": not missing_by_episode,
+            "contract_ready": self.spec.readiness.ready,
+            "contract_blockers": list(self.spec.readiness.blockers),
             "clock_synchronized": self.spec.clock_synchronized,
             "dynamic_excitation_joints": diagnostics["dynamic_excitation_joints"],
             "reversal_joints": diagnostics["reversal_joints"],
@@ -224,7 +230,9 @@ class TabularJointEvidence:
                     raw = joint_rows.loc[joint_rows["_signal"] == signal, "_value"].to_numpy(dtype=np.float64)
                     if not len(raw):
                         continue
-                    values[signal] = binding.apply_velocity(raw) if signal == "actual_dq" else binding.apply_position(raw)
+                    values[signal] = (
+                        binding.apply_velocity(raw) if signal == "actual_dq" else binding.apply_position(raw)
+                    )
                 if set(values) != set(_REQUIRED_SIGNALS):
                     continue
                 command_excursion = float(np.ptp(values["command_q"]))
@@ -240,8 +248,7 @@ class TabularJointEvidence:
                     and peak_velocity >= minimum_velocity
                 )
                 has_reversal_episode |= (
-                    float(np.max(velocity)) >= minimum_velocity
-                    and float(np.min(velocity)) <= -minimum_velocity
+                    float(np.max(velocity)) >= minimum_velocity and float(np.min(velocity)) <= -minimum_velocity
                 )
             if has_dynamic_episode:
                 dynamic.add(binding.source_joint)
@@ -270,6 +277,10 @@ class TabularJointEvidence:
         command_delay_s: float = 0.0,
         max_duration_s: float | None = None,
     ) -> ArticulationEpisode:
+        if self.inspection_only:
+            raise ValueError(
+                "Inspection-only evidence cannot produce fit/validation episodes; complete and bind it first"
+            )
         if not np.isfinite(dt) or dt <= 0.0:
             raise ValueError("dt must be finite and greater than zero")
         if not np.isfinite(command_delay_s) or command_delay_s < 0.0:

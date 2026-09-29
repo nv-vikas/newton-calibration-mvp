@@ -12,8 +12,16 @@ transfer. Experimental extensions are not part of this deliverable.
 
 ## Start here
 
+Start the guided terminal experience with `newton-calibration guide`, or connect
+your agent to the same [guided API](docs/guided_workflow.md). Pick **Arm joint
+tuning**, supply what you have, and leave unknowns unresolved. The guide inspects
+the inputs and asks for what is missing. Grasp and insertion are listed as
+planned, not executable recipes.
+
 | I want to… | Read / run |
 |---|---|
+| Start with a robot and a goal, with or without real data | [Guided workflow](docs/guided_workflow.md) |
+| Try the entire guided journey without a robot/GPU | `python examples/guided/demo.py --output output/guided-demo` (synthetic) |
 | Understand the product and the five calls | [Toolkit integration guide](docs/toolkit_guide.md) |
 | Understand what an arm calibration recipe contains | [Reusable arm recipe](src/newton_calibration/recipes/arm_joint_response.v1.json) |
 | Build a customer report from recorded results | [Reporting developer guide](docs/recipe_reporting.md) |
@@ -40,6 +48,9 @@ remain “not recorded”; they are never filled in from the recipe's expectatio
 
 An optional agent uses the same five APIs to guide and monitor the work. It does
 not own physics, invent confirmations, or replace the package verification gate.
+The guide adds durable intake and collection states around those calls; it does
+not replace them with a second fitting script. **Analysis completed** and
+**ready to fit** are separate decisions.
 
 ## A report customers can read
 
@@ -92,10 +103,12 @@ installed adapters still determine which controllers and experiments can execute
 
 - **Available:** five-call toolkit, evidence/runtime/optimizer boundaries,
   held-out validation, scoped package loader, read-only recipe-driven reporting,
-  a five-call record adapter and an explicitly experimental Flexiv replay importer.
-- **Reporting in this change:** JSON contract and hashed record bundle; offline,
-  customer-first HTML; missing-fact checks; local GIF support; developer examples
-  and tests. It is a post-run reporting layer, not a new calibration executor.
+  a five-call record adapter and an explicitly experimental Flexiv replay importer;
+  guided recipe selection, setup/evidence intake, collection planning, resumable
+  execution and a customer report sourced from the actual run records.
+- **Collection:** exact command files and a default preview request. A running,
+  compatible Isaac Lab/Newton scene adapter is required to render the video and
+  perform dynamics-based experiment design. Missing adapters remain visible.
 - **Not claimed:** unrestricted “any USD,” automatic confirmation of hardware
   settings, calibrated Cartesian/OSC control, real insertion transfer, or
   Minjae's proprietary agent implementation bundled in this repository.

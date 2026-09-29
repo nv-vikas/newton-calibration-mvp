@@ -4,9 +4,16 @@
   "title": "Arm joint calibration",
   "purpose": "Match the supported arm's free-motion response to measured commands and joint feedback, then test on separate recordings.",
   "execution": {
-    "supported_recipe_ids": ["articulation.position_pd.free_space.v1", "articulation.position_pd.free_space@2", "so101_actuator_dynamics.v1"],
-    "boundary": "This document describes the reusable procedure and enforces reporting requirements. Existing Python recipes still own executable bounds, loss, optimizer and gates. This JSON does not add a new controller or motion generator.",
+    "supported_recipe_ids": ["articulation.position_pd.free_space.v1", "articulation.position_pd.free_space@2", "articulation.position_pd.free_space@3", "so101_actuator_dynamics.v1"],
+    "boundary": "The guided section selects the installed executor and default parameter scope; reporting requirements are enforced by the report builder. Other sections describe the reusable procedure. Existing Python recipes own executable bounds, loss, optimizer and gates. This JSON does not install code, controllers or motion generators.",
     "not_supported": ["Cartesian or OSC calibration", "grasp contact", "insertion", "universal hardware defaults"]
+  },
+  "guided": {
+    "executor": "articulation.position_pd.free_space@3",
+    "default_parameter_families": ["stiffness_scale", "damping_scale"],
+    "default_scope_notice": "Start with stiffness and damping for each declared joint group. Add armature, friction, effort or delay explicitly; insufficient evidence never silently removes a requested parameter.",
+    "collection_catalog": "mvp1.free-motion-design@1",
+    "future_recipes": ["grasp", "insertion"]
   },
   "setup_inputs": [
     {"id": "asset", "required": true, "meaning": "USD and dependencies, asset digest, joint names/limits, units, base mounting and supported Newton runtime."},

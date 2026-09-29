@@ -16,7 +16,7 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
     """
     root = Path(run_dir)
     records, original_hashes = {}, {}
-    for name in ("analysis", "plan", "fit", "validation"):
+    for name in ("analysis", "plan", "fit", "validation", "guided_intake"):
         path = root / f"{name}.json"
         if path.is_file():
             raw = path.read_bytes()
@@ -33,6 +33,7 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
         raise ReportError("Do not mix records from different runs")
     run_id = ids.pop()
     analysis = records.get("analysis", {})
+    intake = records.get("guided_intake", {})
     plan = records.get("plan", {})
     fit = records.get("fit", {})
     validation = records.get("validation", {})
@@ -45,6 +46,8 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
     if plan and plan.get("recipe") not in recipe["execution"]["supported_recipe_ids"]:
         raise ReportError("Execution recipe is not supported by this report adapter")
     env = plan.get("environment", analysis.get("environment", {}))
+    if intake and intake.get("environment") != env:
+        raise ReportError("Guided intake does not match the recorded environment")
     view = {
         "adapter": "five-call-report-adapter/v1",
         "run_id": run_id,
@@ -56,6 +59,13 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
         "metric_label": "held-out joint-position RMSE (episode-average)",
         "metric_unit": "rad",
     }
+    if env.get("adapter") == "analytic":
+        view["execution_note"] = (
+            "Five-call records from the analytic test backend. No Newton GPU or real-robot validation was performed by this run."
+        )
+        view["limitations"] = (
+            "Software integration result only; the analytic test backend cannot qualify a Newton calibration package or establish task transfer."
+        )
     facts = {}
 
     def bind(key, source, pointer):
@@ -84,9 +94,20 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
         )
         derived(
             "analyze.status",
-            "blocked" if any(v is False for v in analysis.get("readiness", {}).values()) else "recorded",
+            "completed",
         )
         derived("analyze.summary", "Evidence inspected. Readiness checks and unresolved inputs are recorded below.")
+        if intake:
+            declared = intake.get("inputs", {})
+            derived(
+                "controller_tool",
+                {
+                    "controller": declared.get("controller"),
+                    "tool": declared.get("tool"),
+                    "confirmations": intake.get("confirmations", {}),
+                    "source": "Recorded user/engineer declarations; not independent hardware verification",
+                },
+            )
         derived(
             "uncertainty",
             {

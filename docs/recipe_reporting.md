@@ -17,12 +17,15 @@ and detailed checks sit behind stage disclosures or in the downloadable records.
 | Report bundle | Versioned links from semantic facts to hash-checked source records | Execute code, silently change records, or authorize activation |
 | Customer HTML | Outcome, evidence, limits and next action | Imply transfer because the simulation error decreased |
 
-The reporting contract is **currently a post-run attachment**. Its digest is
-locked to the report bundle, not yet added to the calibration plan fingerprint.
-The JSON recipe's procedural sections are documentation; reporting field
-requirements are enforced by code. Existing Python recipes own executable
-calibration behavior. This change does not implement new collection generators,
-new controller support, grasp, or insertion calibration.
+Direct five-call users attach the report after execution. The new
+[guided workflow](guided_workflow.md) also locks the recipe digest in the session
+and saves a recipe/setup snapshot in `guided_intake.json` alongside the run.
+It requires a new session revision when the recipe changes; the report bundle
+locks the same digest. This does not change the underlying calibration-plan
+schema. The recipe's `guided` section selects an installed executor and default
+parameter scope. Other procedural sections are documentation; reporting field
+requirements are enforced by code. Existing Python recipes still own executable
+bounds, losses, optimizers and gates. No grasp/insertion implementation is added.
 
 ## Run the existing toolkit, then report
 
@@ -45,10 +48,14 @@ render_report(model, "output/my-report-revision-1/report.html")
 ```
 
 This consumes `analysis.json`, `plan.json`, `fit.json`, `validation.json` and the
-optional package `manifest.json`. It checks same-run identity and nested
+optional package `manifest.json` and `guided_intake.json`. Guided controller/tool
+confirmations remain attributed declarations, not independently verified facts.
+It checks same-run identity, intake/environment agreement and nested
 plan/fit consistency. It never reads `status.json` as scientific evidence.
 Partial runs render with missing facts and unknown stages. Missing records do
 not prove a stage was never attempted: `unknown` and `not_run` are distinct.
+The presence of an analysis result means analysis completed; failed readiness
+checks prevent fitting and do not turn the analysis itself into a failed call.
 
 The adapter selects held-out `position_rmse_rad` for the customer comparison.
 The optimizer's weighted loss and the validation gate results are shown

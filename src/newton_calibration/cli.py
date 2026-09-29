@@ -15,6 +15,10 @@ from newton_calibration.optimizers import list_optimizers
 def main() -> None:
     parser = argparse.ArgumentParser(prog="newton-calibration", description="Newton calibration MVP1")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    from newton_calibration.guided.cli import add_parser
+    from newton_calibration.guided.cli import run as run_guide
+
+    add_parser(subparsers)
     fetch_parser = subparsers.add_parser("fetch", help="download SO-101 Anchor-Lab evidence and USD")
     fetch_parser.add_argument("--output", default="data/anchor-lab")
     fetch_parser.add_argument("--revision", default="647edd5787cd764cdc041103ad282dc59214d919")
@@ -42,6 +46,9 @@ def main() -> None:
     _add_job_arguments(run_parser, include_fit=True)
 
     args = parser.parse_args()
+    if args.command == "guide":
+        run_guide(args)
+        return
     if args.command == "fetch":
         print(json.dumps(fetch_anchor_lab_so101(args.output, args.revision), indent=2))
         return

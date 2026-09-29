@@ -102,6 +102,7 @@ def analyze(
     requested_names = set(recipe_cfg.required_parameter_names)
     declared_names = {parameter.name for parameter in recipe_cfg.parameters}
     readiness = {
+        "evidence_contract_ready": inventory.get("contract_ready", True),
         "asset_exists": not any(error.startswith("USD asset does not exist") for error in asset_errors),
         "asset_profile_valid": not asset_errors,
         "residual_model_valid": not residual_errors,
@@ -115,7 +116,7 @@ def analyze(
         "requested_parameter_bounds_declared": requested_names == declared_names,
         "requested_parameters_identifiable": {parameter.name for parameter in identifiable} == requested_names,
     }
-    warnings = list(asset_errors) + asset_warnings + residual_errors
+    warnings = list(asset_errors) + asset_warnings + residual_errors + list(inventory.get("contract_blockers", []))
     if isinstance(adapter, _MissingEvidence):
         warnings.append(
             "No real evidence supplied: this is asset/evidence-readiness analysis, not measured-data analysis or calibration."

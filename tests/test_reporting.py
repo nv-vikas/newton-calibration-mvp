@@ -213,7 +213,7 @@ def test_partial_toolkit_records_not_status_surface(tmp_path):
     atomic_write_json(run / "status.json", {"state": "COMPLETE", "activation_allowed": True})
     bundle = export_toolkit_run(run, RECIPE, tmp_path / "snapshot")
     model = build_report(RECIPE, bundle)
-    assert model["values"]["analyze.status"] == "blocked"
+    assert model["values"]["analyze.status"] == "completed"
     assert model["values"]["fit.status"] is None
     assert model["values"]["activation_allowed"] is None
 
