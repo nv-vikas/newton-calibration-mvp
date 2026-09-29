@@ -1,0 +1,79 @@
+{
+  "schema": "newton.calibration.recipe/v1",
+  "id": "arm_joint_response@1",
+  "title": "Arm joint calibration",
+  "purpose": "Match the supported arm's free-motion response to measured commands and joint feedback, then test on separate recordings.",
+  "execution": {
+    "supported_recipe_ids": ["articulation.position_pd.free_space.v1", "articulation.position_pd.free_space@2", "so101_actuator_dynamics.v1"],
+    "boundary": "This document describes the reusable procedure and enforces reporting requirements. Existing Python recipes still own executable bounds, loss, optimizer and gates. This JSON does not add a new controller or motion generator.",
+    "not_supported": ["Cartesian or OSC calibration", "grasp contact", "insertion", "universal hardware defaults"]
+  },
+  "setup_inputs": [
+    {"id": "asset", "required": true, "meaning": "USD and dependencies, asset digest, joint names/limits, units, base mounting and supported Newton runtime."},
+    {"id": "task", "required": true, "meaning": "Task goal and intended deployment interface; free-motion calibration alone does not prove task transfer."},
+    {"id": "joint_mapping", "required": true, "meaning": "Real signal to USD joint map, ordering, sign, units and zero offset, with operator/source confirmation."},
+    {"id": "controller", "required": true, "meaning": "Real and simulated modes, command semantics, update rate, interpolation/filtering, limits, gains, compensation, software versions and confirmation provenance."},
+    {"id": "gripper_tool", "required": true, "meaning": "Attached gripper/tool identity, state, mounting transform, mass/COM/inertia, held payload or explicit no-payload declaration. Unknown values remain unresolved."},
+    {"id": "evidence", "required": false, "meaning": "Existing command and feedback logs, clock semantics, timestamps, units, independent trial IDs and train/held-out assignment. Absence leads to collection planning, not invented measurements."},
+    {"id": "bounds", "required": true, "meaning": "Per-parameter bounds, initial values, ownership, units and source. No portable guess for physical friction/inertia or safe hardware settings."},
+    {"id": "collection_approval", "required": false, "meaning": "Required before real collection: approved starting pose, clear workspace, velocity/acceleration/effort limits, stop procedure and responsible operator. Simulation screening is not safety certification."}
+  ],
+  "parameter_families": [
+    {"id": "stiffness_damping", "owner": "controller/runtime adapter", "evidence": "Timestamped commands and q/dq with excitation across the intended speed/frequency range", "motions": ["smooth settling", "chirp or sweep"], "caveat": "Effective closed-loop response; individual physical constants may be confounded."},
+    {"id": "armature", "owner": "Newton", "evidence": "Acceleration-rich q/dq plus known controller/tool model", "motions": ["bounded acceleration sweep"], "caveat": "Requires independent sensitivity; do not assume all parameters are identifiable from one chirp."},
+    {"id": "friction", "owner": "Newton", "evidence": "Slow bidirectional motion and reversals; torque if available and calibrated", "motions": ["slow reversal", "dwell"], "caveat": "Controller compensation and payload can confound friction."},
+    {"id": "timing", "owner": "toolkit command path", "evidence": "Actual dispatched commands, synchronized clocks and feedback", "motions": ["chirp or sweep"], "caveat": "Missing clock facts cannot be repaired just by collecting more motion."},
+    {"id": "effort_limit", "owner": "controller/runtime adapter", "evidence": "Independently qualified effort/saturation evidence", "motions": [], "caveat": "Never generate saturation-seeking hardware motions automatically."}
+  ],
+  "collection": {
+    "reuse_first": "Inspect existing evidence and reuse sufficient train/held-out recordings.",
+    "missing_evidence": "Request supported collection experiments for the unresolved parameters, with exact joint commands, timing, expected signals and explicit deferred parameters.",
+    "families": ["smooth settling", "chirp or frequency sweep", "slow reversal", "bounded acceleration sweep", "independent held-out multisine or different sweep"],
+    "preview": "Where a scene/preview adapter is available, replay the exact exported commands and record a labeled video. Otherwise report preview unavailable, not passed.",
+    "evidence_to_save": ["sent commands", "joint position and velocity", "timestamps and clock origin", "controller configuration", "tool/payload profile", "trial ID", "motion revision and hashes", "qualified torque if available"],
+    "safety": "Collection is a proposal until the operator approves the robot-specific profile. This recipe is not a hardware authorization."
+  },
+  "validation": {
+    "procedure": "Lock train/held-out split, bounds, objective and runtime before fitting. Use held-out trajectories only for validation; disclose any later model-selection use.",
+    "report": "Baseline and calibrated metric, per-episode regressions, stability, declared gates, parameter uncertainty, provenance and activation decision from the package writer.",
+    "scope": "Arm free motion only. Gripper attachment is context, not proof of gripping force. Real task transfer requires separate evidence."
+  },
+  "reporting": {
+    "schema": "newton.calibration.reporting/v1",
+    "fields": [
+      {"id": "inputs", "label": "What the user supplied", "stage": "analyze", "type": "text", "required": true},
+      {"id": "discoveries", "label": "What the evidence revealed", "stage": "analyze", "type": "text", "required": true},
+      {"id": "limitations", "label": "What remains unproven", "stage": "analyze", "type": "text", "required": true},
+      {"id": "next_action", "label": "Next action", "stage": "write", "type": "text", "required": true},
+      {"id": "execution_note", "label": "Execution origin", "stage": "write", "type": "text", "required": true},
+      {"id": "scope", "label": "Actual calibrated scope", "stage": "plan", "type": "text", "required": true},
+      {"id": "baseline_error", "label": "Held-out baseline error", "stage": "validate", "type": "number", "required": true},
+      {"id": "tuned_error", "label": "Held-out tuned error", "stage": "validate", "type": "number", "required": true},
+      {"id": "metric_label", "label": "Metric definition", "stage": "validate", "type": "text", "required": true},
+      {"id": "metric_unit", "label": "Metric unit", "stage": "validate", "type": "text", "required": true},
+      {"id": "validation_passed", "label": "Recorded held-out decision", "stage": "validate", "type": "boolean", "required": true},
+      {"id": "activation_allowed", "label": "Recorded activation decision", "stage": "write", "type": "boolean", "required": true},
+      {"id": "parameters", "label": "Tuned parameters, ownership and bounds", "stage": "plan", "type": "object", "required": true},
+      {"id": "objective", "label": "Loss function actually used", "stage": "fit", "type": "object", "required": true},
+      {"id": "optimizer", "label": "Optimizer and actual work", "stage": "fit", "type": "object", "required": true},
+      {"id": "collection", "label": "Reused/generated motions and missing evidence", "stage": "plan", "type": "object", "required": true},
+      {"id": "runtime", "label": "Runtime and fixed settings", "stage": "plan", "type": "object", "required": true},
+      {"id": "gates", "label": "Validation gates", "stage": "validate", "type": "object", "required": true},
+      {"id": "analyze.status", "label": "Analyze status", "stage": "analyze", "type": "status", "required": true},
+      {"id": "analyze.summary", "label": "Analyze outcome", "stage": "analyze", "type": "text", "required": true},
+      {"id": "plan.status", "label": "Plan status", "stage": "plan", "type": "status", "required": true},
+      {"id": "plan.summary", "label": "Plan outcome", "stage": "plan", "type": "text", "required": true},
+      {"id": "fit.status", "label": "Fit status", "stage": "fit", "type": "status", "required": true},
+      {"id": "fit.summary", "label": "Fit outcome", "stage": "fit", "type": "text", "required": true},
+      {"id": "validate.status", "label": "Validate status", "stage": "validate", "type": "status", "required": true},
+      {"id": "validate.summary", "label": "Validate outcome", "stage": "validate", "type": "text", "required": true},
+      {"id": "write.status", "label": "Write status", "stage": "write", "type": "status", "required": true},
+      {"id": "write.summary", "label": "Write outcome", "stage": "write", "type": "text", "required": true},
+      {"id": "readiness", "label": "Readiness and evidence quality", "stage": "analyze", "type": "object", "required": true},
+      {"id": "controller_tool", "label": "Controller and attached tool", "stage": "analyze", "type": "object", "required": true},
+      {"id": "split", "label": "Training / held-out split", "stage": "plan", "type": "object", "required": true},
+      {"id": "uncertainty", "label": "Parameter uncertainty and identification limits", "stage": "validate", "type": "object", "required": true},
+      {"id": "outputs", "label": "Saved output and provenance", "stage": "write", "type": "object", "required": true}
+    ]
+  }
+}

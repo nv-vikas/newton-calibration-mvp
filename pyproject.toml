@@ -30,6 +30,10 @@ newton-calibration = "newton_calibration.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"newton_calibration.reporting" = ["*.css"]
+"newton_calibration.recipes" = ["*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
