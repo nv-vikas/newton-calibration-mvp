@@ -63,6 +63,38 @@ items were reviewed, e.g. `"confirm": ["mapping", "controller", "tool", "bounds"
 Record the actual verifier, not an agent-generated identity. These are attributed
 assertions, not an authentication system or hardware authorization.
 
+An agent may choose and record **simulation search bounds** under its own identity,
+using `provide(..., reviewer_kind="agent", confirmed_by="actual agent name")`
+or CLI `--reviewer-kind agent`. Only `"confirm": ["bounds"]` is permitted in
+that case. It cannot confirm mapping, real controller or attached-tool facts.
+This does not override any readiness check or authorize real robot execution.
+
+### Work the toolkit/agent can finish without asking the operator
+
+`guided.preflight` offers offline helpers for source-backed preparation:
+
+- `inspect_simulation_profile(path, joint_map)` checks explicit per-joint
+  baseline values from an existing toolkit profile and records its hash. It
+  produces a proposal, not hardware settings or a runtime validation.
+- `inspect_usd_properties(path)` inventories authored joint drives and body
+  mass/inertia without running Newton. Missing properties stay missing. Raw
+  angular drive gains are not copied into a radian-based controller.
+- `replay_slew_limiter(...)` models a declared velocity limiter using command
+  event times. It is diagnostic only. Initial limiter state and actual send
+  times are required for an exact historical replay; a reconstruction must
+  never be relabeled as measured published commands or used to bypass intake.
+
+Record completed checks, changed simulation choices, source hashes and remaining
+questions with the new run. Preserve original recordings and prior sessions.
+Ask the operator only for unresolved setup facts or existing missing files—not
+for simulation gains that already have a source or a blanket new data collection.
+
+Replay sample timing is versioned: sample zero is the initial state at `t0`;
+command `k` advances the simulator to sample `k+1`. N recorded samples require
+N−1 transitions, not N. The fit execution fingerprint includes this convention,
+so a pre-fix fit journal cannot resume silently with changed scoring semantics.
+Historical results are retained; they are not upgraded by these software tests.
+
 ## After Analyze: what do I do next?
 
 Analysis can complete while fitting is not ready. Every newly saved session has

@@ -18,6 +18,7 @@ from newton_calibration.adapters.asset import (
 )
 from newton_calibration.adapters.evidence import AnchorLabSO101Evidence, TabularJointEvidence
 from newton_calibration.adapters.runtime import create_runtime
+from newton_calibration.adapters.runtime.analytic import SAMPLE_TIMING_CONTRACT
 from newton_calibration.collection import CollectionPlan, MotionSpec, create_collection_plan, prepare_assistance
 from newton_calibration.collection.contracts import CalibrationRequest
 from newton_calibration.collection.planning import ScenePreview
@@ -1029,7 +1030,11 @@ def _fit_execution_fingerprint(
     plan_payload["optimizer"] = optimizer_payload
     try:
         encoded = json.dumps(
-            {"schema": "newton.calibration.fit-execution/v1", "plan": plan_payload},
+            {
+                "schema": "newton.calibration.fit-execution/v2",
+                "plan": plan_payload,
+                "sample_timing_contract": SAMPLE_TIMING_CONTRACT,
+            },
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,

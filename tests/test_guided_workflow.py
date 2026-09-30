@@ -439,8 +439,37 @@ def test_controller_change_invalidates_confirmation_and_keeps_history(setup, tmp
 
 def test_missing_confirmation_identity_rejected(setup, tmp_path):
     root = create(tmp_path, setup[0])
-    with pytest.raises(ValueError, match="person"):
+    with pytest.raises(ValueError, match="reviewer"):
         provide(root, {"confirm": ["mapping"]}, source="agent guess")
+
+
+def test_agent_can_record_software_bounds_but_not_hardware_facts(setup, tmp_path):
+    asset, answers = setup
+    answers.pop("confirm")
+    root = create(tmp_path, asset, answers)
+    result = provide(
+        root,
+        {"confirm": ["bounds"]},
+        source="Synthetic simulation search bounds review",
+        confirmed_by="Test agent",
+        reviewer_kind="agent",
+    )
+    assert result["confirmations"]["bounds"]["reviewer_kind"] == "agent"
+    assert "confirm.bounds" not in {q["key"] for q in result["questions"]}
+    assert {"confirm.mapping", "confirm.controller", "confirm.tool"} <= {q["key"] for q in result["questions"]}
+    revision = result["revision"]
+    for name in ("mapping", "controller", "tool"):
+        with pytest.raises(ValueError, match="simulation bounds only"):
+            provide(
+                root,
+                {"confirm": [name]},
+                source="Not a hardware attestation",
+                confirmed_by="Test agent",
+                reviewer_kind="agent",
+            )
+        assert status(root)["revision"] == revision
+    result = advance(root, execute=True)
+    assert not result["fit_allowed"] and "fit" not in result["artifacts"]
 
 
 def test_changed_usd_is_not_silently_reused(setup, tmp_path):

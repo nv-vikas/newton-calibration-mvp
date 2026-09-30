@@ -29,7 +29,13 @@ def add_parser(subparsers):
         if action == "provide":
             sub.add_argument("--answers", required=True, help="Data-only JSON with answers; null means unknown")
             sub.add_argument("--source", required=True)
-            sub.add_argument("--confirmed-by", help="Person who actually verified the explicitly listed confirmations")
+            sub.add_argument("--confirmed-by", help="Actual reviewer of the explicitly listed confirmations")
+            sub.add_argument(
+                "--reviewer-kind",
+                choices=("human", "agent"),
+                default="human",
+                help="Agents may review simulation bounds only; never hardware facts",
+            )
         if action == "advance":
             sub.add_argument("--execute", action="store_true", help="Permit fitting once every readiness check passes")
             sub.add_argument(
@@ -182,7 +188,13 @@ def run(args):
     elif action == "status":
         state = status(args.session)
     elif action == "provide":
-        state = provide(args.session, read(args.answers), source=args.source, confirmed_by=args.confirmed_by)
+        state = provide(
+            args.session,
+            read(args.answers),
+            source=args.source,
+            confirmed_by=args.confirmed_by,
+            reviewer_kind=args.reviewer_kind,
+        )
     elif action == "wizard":
         wizard(args.session)
         return

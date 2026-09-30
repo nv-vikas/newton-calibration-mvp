@@ -21,6 +21,7 @@ _SO101_ANALYTIC_STIFFNESS = (35.0, 35.0, 35.0, 35.0, 35.0, 28.0)
 _SO101_ANALYTIC_DAMPING = (2.0, 2.0, 2.0, 2.0, 2.0, 1.5)
 _SO101_ANALYTIC_INERTIA = (1.8, 1.6, 1.2, 0.7, 0.5, 0.35)
 _GROUP_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+SAMPLE_TIMING_CONTRACT = "initial_state_at_t0_then_post_step@1"
 
 
 @dataclass(frozen=True)
@@ -345,7 +346,9 @@ class AnalyticPDReplayRuntime:
         inertia = self.base_inertia + properties["armature"]
         if self.residual is not None:
             self.residual.reset(episode.command_q[0])
-        for step in range(len(episode.time_s)):
+        # q(t0) is the supplied initial condition, not the state after dt.
+        q_history[0], dq_history[0] = q, dq
+        for step in range(len(episode.time_s) - 1):
             command = episode.command_q[max(0, step - delay_steps)]
             torque = kp * (command - q) - kd * dq - friction * np.tanh(dq / 0.01)
             if self.residual is not None:
@@ -354,8 +357,8 @@ class AnalyticPDReplayRuntime:
             ddq = torque / inertia
             dq += dt * ddq
             q += dt * dq
-            q_history[step] = q
-            dq_history[step] = dq
+            q_history[step + 1] = q
+            dq_history[step + 1] = dq
         return q_history, dq_history
 
     def close(self) -> None:

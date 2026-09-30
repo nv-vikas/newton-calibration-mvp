@@ -53,11 +53,12 @@ def start(*, asset, goal, directory, recipe=None, evidence=None):
     return review(root)
 
 
-def provide(directory, answers, *, source, confirmed_by=None):
+def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="human"):
     """Record answers/provenance; explicit confirmations are tied to setup bytes.
 
-    An agent may submit user-confirmed facts, but must never populate confirmed_by
-    from its own guesses. This is an assertion record, not identity authentication.
+    An agent may review simulation-only bounds under its own identity. Mapping,
+    controller and tool confirmations still require an attributed human review.
+    This is an assertion record, not identity authentication or hardware consent.
     """
     if not isinstance(answers, dict) or not isinstance(source, str) or not source.strip():
         raise ValueError("Answers must be an object with a source")
@@ -67,7 +68,11 @@ def provide(directory, answers, *, source, confirmed_by=None):
     if not isinstance(names, list) or any(name not in CONFIRMATIONS for name in names):
         raise ValueError("confirm must list mapping, controller, tool and/or bounds")
     if names and (not isinstance(confirmed_by, str) or not confirmed_by.strip()):
-        raise ValueError("Explicit confirmations require the name of the person who verified them")
+        raise ValueError("Explicit confirmations require the name of the reviewer who verified them")
+    if reviewer_kind not in {"human", "agent"}:
+        raise ValueError("reviewer_kind must be human or agent")
+    if reviewer_kind == "agent" and set(names) - {"bounds"}:
+        raise ValueError("An agent may confirm simulation bounds only, not mapping/controller/tool hardware facts")
     with locked(directory) as (root, session):
         previous = deepcopy(session)
         if "recipe" in answers:
@@ -93,6 +98,7 @@ def provide(directory, answers, *, source, confirmed_by=None):
         for name in names:
             session["confirmations"][name] = {
                 "by": confirmed_by,
+                "reviewer_kind": reviewer_kind,
                 "source": source,
                 "at": utc_now(),
                 "basis": confirmation_basis(session["inputs"], name, current_asset),
@@ -121,7 +127,12 @@ def provide(directory, answers, *, source, confirmed_by=None):
             "active_step",
         ):
             session.pop(field, None)
-        session["last_answers"] = {"source": source, "keys": sorted(answers), "confirmed_by": confirmed_by}
+        session["last_answers"] = {
+            "source": source,
+            "keys": sorted(answers),
+            "confirmed_by": confirmed_by,
+            "reviewer_kind": reviewer_kind,
+        }
         save(root, session, "inputs_updated; prior results retained but no longer current")
     return review(directory)
 

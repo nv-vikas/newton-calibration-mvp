@@ -124,9 +124,7 @@ class IsaacLabNewtonRuntime:
         actuator = self.robot.actuators[self.actuator_name]
         actuator_names = list(getattr(actuator, "joint_names", ()))
         if actuator_names != desired:
-            raise RuntimeError(
-                f"Calibration actuator joint mismatch. Expected {desired}, found {actuator_names}"
-            )
+            raise RuntimeError(f"Calibration actuator joint mismatch. Expected {desired}, found {actuator_names}")
         actuator_global_ids = _actuator_global_indices(
             getattr(actuator, "joint_indices", None),
             total_joints=self.robot.num_joints,
@@ -346,7 +344,11 @@ class IsaacLabNewtonRuntime:
         stable = True
         if self.residual is not None:
             self.residual.reset(episode.command_q[0])
-        for step in range(len(episode.time_s)):
+        # State written above belongs to t0. Commands at t[k] advance to t[k+1].
+        # Comparing a post-step state with reference[k] introduces a false lead.
+        q_history[0] = initial_q.detach().cpu().numpy()[0]
+        dq_history[0] = initial_dq.detach().cpu().numpy()[0]
+        for step in range(len(episode.time_s) - 1):
             command = torch.as_tensor(
                 episode.command_q[max(0, step - delay_steps) : max(0, step - delay_steps) + 1],
                 dtype=torch.float32,
@@ -373,10 +375,10 @@ class IsaacLabNewtonRuntime:
             self.robot.update(self.environment.dt)
             q = self.robot.data.joint_pos.torch[0, self.joint_ids_tensor].detach().cpu().numpy()
             dq = self.robot.data.joint_vel.torch[0, self.joint_ids_tensor].detach().cpu().numpy()
-            q_history[step], dq_history[step] = q, dq
-            if not np.isfinite(q).all() or float(np.max(np.abs(q))) > 100.0:
-                q_history[step:] = q
-                dq_history[step:] = dq
+            q_history[step + 1], dq_history[step + 1] = q, dq
+            if not np.isfinite(q).all() or not np.isfinite(dq).all() or float(np.max(np.abs(q))) > 100.0:
+                q_history[step + 1 :] = q
+                dq_history[step + 1 :] = dq
                 stable = False
                 break
         return q_history, dq_history, stable
