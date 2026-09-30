@@ -22,6 +22,7 @@ from newton_calibration.collection import CollectionPlan, MotionSpec, create_col
 from newton_calibration.collection.contracts import CalibrationRequest
 from newton_calibration.collection.planning import ScenePreview
 from newton_calibration.collection.registry import get_catalog
+from newton_calibration.controllers import resolve_controller
 from newton_calibration.core.attestation import record_fingerprint
 from newton_calibration.core.evidence_spec import BoundEvidenceSpec
 from newton_calibration.core.fit_journal import FitJournal
@@ -60,6 +61,10 @@ def analyze(
     recipe: str | None = None,
     request: CalibrationRequest | None = None,
     evidence_revision: str = "local",
+    controller_profile=None,
+    isaaclab_env=None,
+    controller_action: str | None = None,
+    controller_asset: str = "robot",
     workdir: str | Path = "runs",
 ) -> AnalysisResult:
     """Call 1/5: inventory evidence and determine recipe/evidence readiness.
@@ -70,6 +75,12 @@ def analyze(
     actions. plan() routes to collection, never to an unqualified fitting job.
     """
     environment = _lock_residual_fingerprint(_environment_spec(env))
+    if isaaclab_env is None and hasattr(env, "describe_controller_config"):
+        isaaclab_env = env.describe_controller_config()
+    environment, controller = resolve_controller(
+        environment, profile=controller_profile, isaaclab_env=isaaclab_env,
+        action_name=controller_action, asset_name=controller_asset,
+    )
     request = request or CalibrationRequest()
     if request.target_parameters:
         if environment.profile_schema != "articulation-profile/v1":
@@ -77,6 +88,21 @@ def analyze(
         environment = replace(environment, tuning_targets=request.target_parameters)
     adapter = _evidence_adapter(evidence, evidence_revision)
     inventory = adapter.inventory()
+    evidence_spec = _describe_evidence(adapter)
+    captured_controller = evidence_spec.get("controller_profile_fingerprint")
+    controller_evidence_ok = (
+        not environment.controller_profile and not captured_controller
+        or bool(captured_controller) and captured_controller == controller["fingerprint"]
+    )
+    controller["evidence"] = {
+        "status": "missing" if isinstance(adapter, _MissingEvidence) else "legacy_unbound" if not environment.controller_profile and not captured_controller else "matches" if controller_evidence_ok else "controller_binding_required",
+        "captured_fingerprint": captured_controller,
+        "expected_fingerprint": controller["fingerprint"] or None,
+    }
+    if not isinstance(adapter, _MissingEvidence) and not controller_evidence_ok:
+        controller["questions"].append({
+            "id": "evidence_controller", "question": "Which controller produced these logs? Bind the verified capture controller fingerprint to the evidence; do not relabel logs from another control mode.",
+        })
     generic = environment.profile_schema == "articulation-profile/v1"
     recipe_name = recipe or ("articulation.position_pd.free_space@3" if generic else "so101_actuator_dynamics.v1")
     recipe_cfg = get_recipe(recipe_name, environment if generic else None)
@@ -94,6 +120,8 @@ def analyze(
         for parameter in recipe_cfg.parameters
         if parameter.name in exposed and parameter.name in identifiability
     ]
+    if not controller["fit_supported"]:
+        identifiable = []  # PD-recipe evidence is not qualification of another controller family.
     required_joint_order = _ordered_joints(environment) if generic else list(environment.joint_map)
     required_joints = set(required_joint_order)
     evidence_joints = set(inventory.get("source_joints", inventory["joints"]))
@@ -102,6 +130,10 @@ def analyze(
     requested_names = set(recipe_cfg.required_parameter_names)
     declared_names = {parameter.name for parameter in recipe_cfg.parameters}
     readiness = {
+        "controller_supported": controller["fit_supported"],
+        "controller_profile_schema_supported": not environment.controller_profile or generic,
+        "controller_contract_ready": controller["fit_ready"] if generic or environment.controller_profile else True,
+        "controller_evidence_matches": controller_evidence_ok,
         "asset_exists": not any(error.startswith("USD asset does not exist") for error in asset_errors),
         "asset_profile_valid": not asset_errors,
         "residual_model_valid": not residual_errors,
@@ -116,6 +148,10 @@ def analyze(
         "requested_parameters_identifiable": {parameter.name for parameter in identifiable} == requested_names,
     }
     warnings = list(asset_errors) + asset_warnings + residual_errors
+    warnings.extend(controller.get("blockers", []))
+    warnings.extend(controller.get("warnings", []))
+    if environment.controller_profile and not generic:
+        warnings.append("Structured controller binding requires ArticulationEnvCfg and generic tabular evidence; the legacy SO-101 profile remains unchanged.")
     if isinstance(adapter, _MissingEvidence):
         warnings.append(
             "No real evidence supplied: this is asset/evidence-readiness analysis, not measured-data analysis or calibration."
@@ -174,15 +210,17 @@ def analyze(
         readiness=readiness,
         workdir=str(run_dir),
         recipe=recipe_cfg.name,
-        evidence_spec=_describe_evidence(adapter),
+        evidence_spec=evidence_spec,
         mapping_report=mapping_report,
         collection_request=jsonable(request),
         evidence_needs=get_catalog(recipe_cfg.collection_catalog).assess(
             environment, recipe_cfg.required_parameter_names, inventory, identifiability, request
         ),
+        controller=controller,
     )
     result.assistance = prepare_assistance(result)
     write_json(run_dir / "analysis.json", result)
+    write_json(run_dir / "controller_discovery.json", controller)
     status = RunStatus(run_dir, run_id)
     blocked = [name for name, ready in readiness.items() if not ready]
     if blocked:
@@ -208,6 +246,10 @@ def assist(
     collection: MotionSpec | None = None,
     preview: ScenePreview | None = None,
     design_probe: Any = None,
+    controller_profile=None,
+    isaaclab_env=None,
+    controller_action: str | None = None,
+    controller_asset: str = "robot",
     video: bool = True,
     workdir: str | Path = "runs",
 ) -> CalibrationPlan | CollectionPlan:
@@ -223,7 +265,11 @@ def assist(
         preview = env.preview_collection
     if design_probe is None and hasattr(env, "design_probe"):
         design_probe = env.design_probe
-    analysis = analyze(env=env, evidence=evidence, recipe=recipe, request=request, workdir=workdir)
+    analysis = analyze(
+        env=env, evidence=evidence, recipe=recipe, request=request, workdir=workdir,
+        controller_profile=controller_profile, isaaclab_env=isaaclab_env,
+        controller_action=controller_action, controller_asset=controller_asset,
+    )
     return plan(analysis, collection=collection, preview=preview, design_probe=design_probe, video=video)
 
 

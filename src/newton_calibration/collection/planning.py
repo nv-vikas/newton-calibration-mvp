@@ -138,7 +138,9 @@ def prepare_assistance(analysis: AnalysisResult) -> dict[str, Any]:
                 else "bounded local search around supplied simulation baseline; requires review",
             }
     return {
-        "next_action": "collect_evidence"
+        "next_action": "review_controller"
+        if analysis.controller.get("questions") or analysis.controller.get("blockers")
+        else "collect_evidence"
         if missing or any(r["disposition"] == "collect" for r in analysis.evidence_needs.get("parameters", []))
         else "review_fitting_readiness",
         "fit_readiness_unchanged": True,
@@ -149,6 +151,7 @@ def prepare_assistance(analysis: AnalysisResult) -> dict[str, Any]:
             "needs": "Verify driver order, units, sign and zero offset against USD; do not infer from matching names",
         },
         "controller": {
+            "discovery": analysis.controller,
             "source": env.controller_profile_source or "not supplied",
             "sim_stiffness": dict(env.base_stiffness_by_joint),
             "sim_damping": dict(env.base_damping_by_joint),
@@ -226,6 +229,23 @@ def create_collection_plan(
     write_json(root / "evidence_needs.json", analysis.evidence_needs)
     result.preview = {"requested": video, "status": "pending" if video else "skipped_explicitly"}
     write_json(root / "agent_assistance.json", result.assistance)
+    controller_lines = ["# Controller review", "", "Confirmation is not real execution approval.", "",
+                        f"Status: {analysis.controller.get('status', 'not inspected')}", ""]
+    controller_lines.extend(f"- {q['question']}" for q in analysis.controller.get("questions", []))
+    controller_lines.extend(f"- {message}" for message in analysis.controller.get("blockers", []))
+    atomic_write_text(root / "CONTROLLER_REVIEW.md", "\n".join(controller_lines) + "\n")
+    if not analysis.controller.get("joint_motion_proposals_allowed", True):
+        result.status = "controller_action_required"
+        result.preview.update(status="blocked", reason="The selected controller is not supported by joint-position collection. Review controller_discovery.json; no substitute PD motions were generated.")
+        write_json(root / "collection_plan.json", result)
+        return result
+    if analysis.environment.controller_profile and motion is not None:
+        rate = analysis.environment.controller_profile["simulation"].get("command_rate_hz")
+        if rate is not None and rate != motion.command_rate_hz:
+            result.status = "controller_action_required"
+            result.preview.update(status="blocked", reason="Motion command rate differs from the locked controller profile; replan with a matching command rate.")
+            write_json(root / "collection_plan.json", result)
+            return result
     if motion is None:
         result.preview["reason"] = (
             "Scene adapter must supply a starting pose, controlled USD DOFs and a simulation motion envelope"

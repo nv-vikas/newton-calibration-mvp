@@ -690,6 +690,11 @@ class VerifiedArticulationPackage:
             raise CalibrationPackageLoadError("Generic package requires a confirmed non-empty robot profile")
         if not environment.controller_profile_confirmed or not environment.controller_profile_source.strip():
             raise CalibrationPackageLoadError("Generic package requires a confirmed controller profile with provenance")
+        if environment.controller_profile:
+            from newton_calibration.controllers import ControllerProfile, controller_report
+
+            if not controller_report(ControllerProfile.from_dict(environment.controller_profile))["fit_ready"]:
+                raise CalibrationPackageLoadError("Package controller contract is unsupported or unconfirmed")
         expected_scope = f"{environment.robot_id} free-space position-controlled articulation dynamics"
         if scope != expected_scope:
             raise CalibrationPackageLoadError("Generic package scope does not match its robot profile")
@@ -793,6 +798,8 @@ class VerifiedArticulationPackage:
             raise CalibrationPackageLoadError("Controller profile was not explicitly confirmed")
         if profile.get("controller_profile_source") != environment.controller_profile_source:
             raise CalibrationPackageLoadError("Controller profile provenance does not match the runtime")
+        if profile.get("controller_profile", {}) != environment.controller_profile:
+            raise CalibrationPackageLoadError("Controller configuration does not match the locked runtime")
         profile_fields = {
             "base_stiffness_by_joint": environment.base_stiffness_by_joint,
             "base_damping_by_joint": environment.base_damping_by_joint,
@@ -806,6 +813,11 @@ class VerifiedArticulationPackage:
         evidence_path = _artifact(root, artifacts, "evidence_spec")
         evidence_payload = _read_json_object(evidence_path, maximum_bytes=_MAX_VALIDATION_BYTES)
         evidence_spec = BoundEvidenceSpec.from_dict(evidence_payload)
+        if environment.controller_profile:
+            from newton_calibration.controllers import ControllerProfile
+
+            if evidence_spec.controller_profile_fingerprint != ControllerProfile.from_dict(environment.controller_profile).fingerprint:
+                raise CalibrationPackageLoadError("Evidence controller does not match the packaged controller profile")
         non_radian_targets = sorted(
             item.source_joint for item in evidence_spec.joint_bindings if item.usd_unit != "rad"
         )
@@ -1267,6 +1279,7 @@ class VerifiedArticulationPackage:
             profile_confirmed=True,
             controller_profile_confirmed=env.controller_profile_confirmed,
             controller_profile_source=env.controller_profile_source,
+            controller_profile=dict(env.controller_profile),
             runtime=env.adapter,
             device=device or env.device,
             dt=env.dt,

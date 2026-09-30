@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +47,7 @@ class EnvironmentSpec:
     # explicitly confirm the values before a fit can start.
     controller_profile_confirmed: bool = False
     controller_profile_source: str = ""
+    controller_profile: dict[str, Any] = field(default_factory=dict)
     base_stiffness: float = 1.7453293
     base_damping: float = 0.017453292
     base_effort_limit: float = 10.0
@@ -74,6 +75,12 @@ class EnvironmentSpec:
     calibration_parameters: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.controller_profile, dict):
+            raise TypeError("controller_profile must be an object")
+        if self.controller_profile:
+            from newton_calibration.controllers import ControllerProfile
+
+            object.__setattr__(self, "controller_profile", ControllerProfile.from_dict(self.controller_profile).to_dict())
         if isinstance(self.tuning_targets, str) or len(self.tuning_targets) != len(set(self.tuning_targets)):
             raise ValueError("tuning_targets must be a unique sequence")
         if any(not isinstance(name, str) or not name for name in self.tuning_targets):
@@ -154,6 +161,7 @@ class AnalysisResult:
     assistance: dict[str, Any] = field(default_factory=dict)
     collection_request: dict[str, Any] = field(default_factory=dict)
     evidence_needs: dict[str, Any] = field(default_factory=dict)
+    controller: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -232,7 +240,11 @@ class CalibrationPackage:
 
 def jsonable(value: Any) -> Any:
     if is_dataclass(value):
-        return {key: jsonable(item) for key, item in asdict(value).items()}
+        result = {item.name: jsonable(getattr(value, item.name)) for item in fields(value)}
+        # Preserve fingerprints of historical packages that predate discovery.
+        if isinstance(value, EnvironmentSpec) and not value.controller_profile:
+            result.pop("controller_profile")
+        return result
     if isinstance(value, dict):
         return {str(key): jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):

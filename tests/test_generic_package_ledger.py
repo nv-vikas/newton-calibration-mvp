@@ -88,7 +88,7 @@ def _write_episode(path: Path, joints: tuple[str, ...], *, phase: float) -> None
     pd.DataFrame(rows).to_csv(path, index=False)
 
 
-def _run_authoritative_contract_fit(tmp_path: Path, monkeypatch, *, targets=()):
+def _run_authoritative_contract_fit(tmp_path: Path, monkeypatch, *, targets=(), controller_profile=None):
     logical_joints = ("joint_0", "joint_1")
     runtime_joints = ("axis_0", "axis_1")
     evidence_root = tmp_path / "evidence"
@@ -136,6 +136,7 @@ def _run_authoritative_contract_fit(tmp_path: Path, monkeypatch, *, targets=()):
         revision="fixture-r1",
         clock_synchronized=True,
         effort_saturation_joints=logical_joints,
+        controller_profile_fingerprint=controller_profile.fingerprint if controller_profile else None,
     )
     bounds = {
         f"{group}_{suffix}": values
@@ -155,6 +156,7 @@ def _run_authoritative_contract_fit(tmp_path: Path, monkeypatch, *, targets=()):
         profile_confirmed=True,
         controller_profile_confirmed=True,
         controller_profile_source="fixture controller configuration sha256:abc",
+        controller_profile=controller_profile.to_dict() if controller_profile else {},
         runtime="isaaclab_newton",
         device="cpu",
         dt=0.02,
@@ -176,6 +178,47 @@ def _run_authoritative_contract_fit(tmp_path: Path, monkeypatch, *, targets=()):
     validation = tuning.validate(fit)
     assert validation.passed, (validation.improvement_pct, validation.regressions, validation.gates)
     return plan, validation
+
+
+def test_controller_profile_package_roundtrip_and_changed_mode_rejection(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from newton_calibration.controllers import ControllerProfile
+
+    profile = ControllerProfile(
+        name="fixture-controller-v1",
+        simulation_confirmed=True,
+        real_confirmed=True,
+        simulation={
+            "kind": "joint_position_pd",
+            "implementation": "IdealPD",
+            "source": "fixture config",
+            "command_space": "joint_position",
+            "frame": "joint",
+            "units": "rad",
+            "command_rate_hz": 50,
+        },
+        real={
+            "interface": "fixture",
+            "mode": "joint_position",
+            "source": "fixture capture",
+            "command_space": "joint_position",
+            "frame": "joint",
+            "units": "rad",
+            "command_rate_hz": 50,
+        },
+    )
+    plan, validation = _run_authoritative_contract_fit(tmp_path, monkeypatch, controller_profile=profile)
+    assert plan.evidence_spec["controller_profile_fingerprint"] == profile.fingerprint
+    package = tuning.write(validation, output=tmp_path / "profile-package")
+    verified = VerifiedArticulationPackage.open(package.output_dir)
+    restored = verified.to_env_cfg(device="cpu").describe()
+    assert restored.controller_profile == profile.to_dict()
+    verified.assert_matches_environment(restored)
+    changed = profile.to_dict()
+    changed["real"]["mode"] = "different_controller"
+    with pytest.raises(CalibrationPackageLoadError, match="changed after package verification"):
+        verified.assert_matches_environment(replace(restored, controller_profile=changed))
 
 
 def test_scoped_generic_package_round_trip_preserves_unselected_baselines(tmp_path, monkeypatch):

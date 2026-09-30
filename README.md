@@ -2,6 +2,9 @@
 
 ## Reference projects
 
+- [Controller discovery](docs/controller_discovery.md): inspect Isaac Lab controller
+  configuration, confirm the real interface, and bind it to evidence and packages.
+  Cartesian controllers are discovery-only; no joint-PD substitution.
 - [Parameter-aware MVP1](docs/parameter_aware_mvp1.md): `analyze → plan` generates
   and refines motions with a bound Newton sensitivity probe, per-joint scope,
   auditable coverage decisions and default scene video. Only MVP1 is implemented.
@@ -207,6 +210,17 @@ An actuator-level residual is available in MVP1 by setting `residual_model_path`
 | Experiment runner | Applies candidates, replays commands in Newton, captures traces, and calculates metrics. |
 | Isaac Lab adapter | Keeps the core independent of backend imports and exposes a serializable environment spec. |
 | Package writer | Records scope, provenance, candidate history, calibrated values, and held-out proof. |
+
+## Agent-executable precision insertion qualification
+
+The new [qualification workflow](docs/precision_insertion_qualification.md) runs
+geometry inspection → bounded solver qualification → controlled insertion →
+frozen-policy comparison through Python or `newton-calibration qualify`.
+It preserves failed attempts, freezes inputs and validation criteria, reserves
+evaluation starts, and emits a scoped simulation record. It does **not** retrain
+the policy or claim real-world calibration. The first scene adapter is the
+[Flexiv resin insertion reference](projects/flexiv_resin_insertion/qualification/).
+Minjae's agent can use the APIs; its private implementation is not bundled.
 
 ## Optimizer plug-ins for Minjae's agent
 

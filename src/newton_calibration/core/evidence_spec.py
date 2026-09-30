@@ -206,10 +206,15 @@ class BoundEvidenceSpec:
     # measured commanded/limited effort).  This declaration is locked into the
     # evidence fingerprint and is never inferred from tracking error.
     effort_saturation_joints: tuple[str, ...] = ()
+    controller_profile_fingerprint: str | None = None
     adapter: str = "tabular_joint.v1"
     schema_version: str = "newton.calibration/bound-evidence@2"
 
     def __post_init__(self) -> None:
+        if self.controller_profile_fingerprint is not None and (
+            not isinstance(self.controller_profile_fingerprint, str) or not _is_sha256(self.controller_profile_fingerprint)
+        ):
+            raise ValueError("controller_profile_fingerprint must be a lowercase SHA-256 digest")
         if self.adapter != "tabular_joint.v1":
             raise ValueError(f"unsupported evidence adapter {self.adapter!r}")
         if self.schema_version != "newton.calibration/bound-evidence@2":
@@ -297,7 +302,7 @@ class BoundEvidenceSpec:
         return _canonical_sha256([item.to_dict() for item in self.joint_bindings])
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema_version": self.schema_version,
             "adapter": self.adapter,
             "root": self.root,
@@ -309,6 +314,9 @@ class BoundEvidenceSpec:
             "clock_synchronized": self.clock_synchronized,
             "effort_saturation_joints": list(self.effort_saturation_joints),
         }
+        if self.controller_profile_fingerprint is not None:
+            payload["controller_profile_fingerprint"] = self.controller_profile_fingerprint
+        return payload
 
     def write(self, path: str | Path) -> Path:
         self.assert_ready()
@@ -339,6 +347,7 @@ class BoundEvidenceSpec:
                 for item in _sequence(value["signal_bindings"], "signal_bindings")
             ),
             clock_synchronized=value.get("clock_synchronized", False),
+            controller_profile_fingerprint=value.get("controller_profile_fingerprint"),
             effort_saturation_joints=tuple(
                 str(item)
                 for item in _sequence(value.get("effort_saturation_joints", ()), "effort_saturation_joints")
@@ -372,6 +381,7 @@ def bind_evidence_files(
     revision: str = "local",
     clock_synchronized: bool = False,
     effort_saturation_joints: Sequence[str] = (),
+    controller_profile_fingerprint: str | None = None,
 ) -> BoundEvidenceSpec:
     """Freeze an explicit episode manifest and its current content digests."""
 
@@ -398,6 +408,7 @@ def bind_evidence_files(
         signal_bindings=tuple(signal_bindings),
         clock_synchronized=clock_synchronized,
         effort_saturation_joints=tuple(effort_saturation_joints),
+        controller_profile_fingerprint=controller_profile_fingerprint,
     )
     result.assert_ready()
     return result

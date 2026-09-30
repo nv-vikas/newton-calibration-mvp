@@ -358,6 +358,7 @@ def _write_articulation_package(validation: ValidationResult, output: str | Path
         "profile_confirmed": environment.profile_confirmed,
         "controller_profile_confirmed": environment.controller_profile_confirmed,
         "controller_profile_source": environment.controller_profile_source,
+        "controller_profile": environment.controller_profile,
         "base_stiffness_by_joint": dict(environment.base_stiffness_by_joint),
         "base_damping_by_joint": dict(environment.base_damping_by_joint),
         "base_effort_limit_by_joint": dict(environment.base_effort_limit_by_joint),

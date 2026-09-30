@@ -153,7 +153,11 @@ nonlinear sweep or a global multi-joint identifiability certificate.
 | Existing fitting/runtime/package layers | Optimizer candidates, Newton runs, held-out comparison, package | Same five-call pipeline; target selection persists into the package |
 
 Only catalog and generator registrations for **MVP1 free motion** are shipped.
-There is **no new MVP2/MVP3 grasp, contact, object or insertion implementation**.
+This collection/fitting catalog does **not** implement MVP2/MVP3 real-evidence
+grasp, contact, object or insertion calibration. A separate
+[precision insertion qualification](precision_insertion_qualification.md) workflow
+now orchestrates simulation diagnostics and frozen-policy evaluation; it must not
+be confused with calibrated real-world contact physics.
 Existing experimental directories and historical Flexiv bundles are preserved.
 Future domains will need their own evidence contracts, parameter bindings,
 catalogs, generators and validation gates; they are not automatically supported

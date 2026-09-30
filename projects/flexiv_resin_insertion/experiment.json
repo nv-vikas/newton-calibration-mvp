@@ -1,0 +1,40 @@
+{
+  "schema": "flexiv.resin-insertion/experiment-v1",
+  "scope": "simulation-only; peg initially grasped; known fixed hole pose; no hardware execution",
+  "reference_repository": "https://github.com/ashwinvkNV/IsaacLabTraining",
+  "reference_commit": "3d8cdbebf66ada310b90df28564761292140d200",
+  "reference_use": "Cartesian OSC, staged resets, PPO and separate task-success evaluation; independent cylindrical-peg task",
+  "physics": "Isaac Lab 3.0.0-beta2 / Newton 1.2.1 / MuJoCo Warp",
+  "controller": "Isaac Lab OperationalSpaceController; not Flexiv Elements controller; not hardware-qualified",
+  "resin": {
+    "density_kg_m3": 1200.0,
+    "static_friction": 0.5,
+    "dynamic_friction": 0.4,
+    "restitution": 0.0,
+    "model": "rigid body approximation",
+    "basis": "unmeasured engineering priors; resin grade, cure, surface roughness and deformation unknown"
+  },
+  "geometry": {
+    "peg_diameter_m": 0.025,
+    "peg_length_m": 0.075,
+    "peg_extension_from_original_grasp_m": 0.012,
+    "bore_diameter_m": 0.0255,
+    "block_height_m": 0.04,
+    "table_top_m": 0.75,
+    "hole_xy_m": [0.15, 0.0],
+    "success_depth_m": 0.035,
+    "max_penetration_m": 0.0002,
+    "success_hold_s": 0.25
+  },
+  "training": {
+    "seed": 20260916,
+    "num_envs": 32,
+    "max_iterations": 1000,
+    "steps_per_env": 128,
+    "save_interval": 10,
+    "max_wall_hours": 48,
+    "max_restarts": 2,
+    "heldout_seed": 932701,
+    "heldout_episodes": 200
+  }
+}

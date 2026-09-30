@@ -25,6 +25,7 @@ class ArticulationEnvCfg:
     profile_confirmed: bool = False
     controller_profile_confirmed: bool = False
     controller_profile_source: str = ""
+    controller_profile: dict = field(default_factory=dict)
     runtime: str = "isaaclab_newton"
     device: str = "cuda:0"
     dt: float = 1.0 / 120.0
@@ -85,6 +86,7 @@ class ArticulationEnvCfg:
             profile_confirmed=self.profile_confirmed,
             controller_profile_confirmed=self.controller_profile_confirmed,
             controller_profile_source=self.controller_profile_source,
+            controller_profile=dict(self.controller_profile),
             base_stiffness=self.base_stiffness,
             base_damping=self.base_damping,
             base_effort_limit=self.base_effort_limit,
