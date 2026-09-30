@@ -24,6 +24,10 @@ says whether new robot data is needed, deferred, or not currently requested.
 A controller-replay software gap does not automatically trigger recollection.
 [See the post-analysis experience →](docs/guided_workflow.md#after-analyze-what-do-i-do-next)
 
+Slow command streams can use faster Newton physics: timestamped targets are held
+until the next update (for example, 30 Hz commands with 960 Hz physics). Command
+limiting and setup confirmations remain separate checks.
+
 | I want to… | Read / run |
 |---|---|
 | Start with a robot and a goal, with or without real data | [Guided workflow](docs/guided_workflow.md) |

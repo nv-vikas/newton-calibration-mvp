@@ -70,12 +70,12 @@ an `action_plan` and a short `next_action`; the CLI displays priorities, owners
 and **done-when** criteria instead of an undifferentiated warning list.
 Detailed input questions remain in JSON and the interactive wizard.
 
-For example, when existing joint recordings are usable for inspection but replay
-timing and setup confirmation are unresolved:
+For example, when existing joint recordings are usable for inspection but the
+driver's command limiting and setup confirmation are unresolved:
 
 | Priority | Owner | Action | Done when |
 |---|---|---|---|
-| 1 | Toolkit engineering / agent | Qualify the replay adapter | Original command timing and applicable limiter/filter behavior are tested at the declared physics step. |
+| 1 | Toolkit engineering / agent | Resolve requested versus driver-published targets | Actual published targets are bound, or the limiter/filter replay is separately implemented and qualified. |
 | 2 | Agent | Prepare the configuration review sheet | Proposed simulation gains, limits, bounds and assumptions cite their sources; unknowns remain explicit. |
 | 3 | Robot engineer, guided by agent | Review unresolved setup facts | Joint mapping, real controller and tool/payload declarations name a verifier and source. |
 | 4 | Toolkit | Re-analyze existing recordings | All gates pass before a fitting plan is locked; otherwise the next specific gap is reported. |
@@ -83,7 +83,8 @@ timing and setup confirmation are unresolved:
 **Data collection: deferred.** First address the replay/setup questions. Do not
 ask the engineer to repeat collection just because software cannot replay it yet.
 Do not alter the declared physics timestep merely to hide a rate mismatch.
-The current adapter's multirate limitation remains; this action list does not fix it.
+Different command and physics rates are supported by timestamped target holding;
+that does not automatically reconstruct missing filtered/limited targets.
 
 The data decision can be `not_assessed`, `deferred`, `needed`, or `not_requested`.
 Missing/insufficient evidence leads to targeted collection, subject to setup and
@@ -169,7 +170,7 @@ structured result has `questions`, `proposals`, `scope`, `evidence_needs`,
 | Section | Contents |
 |---|---|
 | `environment` | `EnvironmentSpec`: source-to-USD map, groups, per-joint PD/effort baselines, bounds, dt and fixed runtime settings. Confirmation booleans here are ignored. |
-| `controller` | Real/sim modes, command semantics, units, rate, filtering, compensation and source revision. |
+| `controller` | Real/sim modes, command semantics, units, rate, filtering, compensation and source revision. `command_stage` distinguishes `requested` from `published` targets when processing exists. |
 | `tool` | Explicit no-tool declaration, or gripper/tool identity, held payload (or none), dynamics/mounting reference, USD match and source. |
 | `joint_bindings` | Source and USD joints, units, sign, scale and offset. Proposals require confirmation. |
 | `evidence` | Bound evidence JSON path/object, or an intake descriptor with `root`, `episodes`, long-form `schema` and `signal_bindings`. Partial training-only evidence is inspectable, not replayable until qualified. |
@@ -187,8 +188,37 @@ effective response calibration, not guaranteed recovery of physical constants.
 Current guided replay supports joint-position PD and absolute joint commands,
 including a declared real joint-impedance path; this does not prove equivalence
 to a vendor's internal controller. Cartesian/OSC/IK/torque commands are rejected
-instead of substituted with PD motions. The current fit adapter requires matching
-command and physics-step rates; multirate replay is not silently assumed.
+instead of substituted with PD motions.
+
+### Slow commands, fast physics
+
+The command rate does **not** have to equal the physics rate. For example, a
+30 Hz target stream can run through 960 Hz physics: each target is held for about
+32 ticks. The implementation uses actual timestamps, not a fixed repeat count,
+so non-integer ratios and irregular arrivals are supported too. A transition is
+applied on the first physics tick at or after its timestamp; quantization is less
+than one physics step. Command arrivals closer together than one physics step
+are rejected instead of silently discarded. Review a finer step and establish
+a new baseline for such a case; do not slow Newton down to equal a slower stream.
+
+The source recordings and declared `dt` remain unchanged. Analyze records a
+`command_replay_timing_supported` gate and per-stream timing diagnostics; the
+guided intake saves the policy, rates and timing check in `command_replay`.
+Feedback interpolation does not create additional real measurements. These
+checks establish command scheduling support, not real-controller equivalence,
+clock synchronization, or physical calibration accuracy.
+
+When `filters` is not explicitly `none`, requested targets are not accepted as
+published targets merely because timing works. Declare `command_stage=published`
+only when the bound recordings actually contain final driver-published targets
+and the source has been reviewed. Otherwise the `controller_processing` question
+remains: inspect existing logs or separately implement and qualify the processing
+path. The current adapter does not reconstruct Flexiv's slew limiter. Do not
+relabel or silently modify requested commands to clear this check.
+
+An older saved guided session must reselect the revised recipe and re-analyze;
+its original records stay intact. No earlier calibration result becomes qualified
+because this scheduling check passed.
 
 ## State and traceability
 

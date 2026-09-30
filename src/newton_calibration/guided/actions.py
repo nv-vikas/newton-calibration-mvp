@@ -85,7 +85,7 @@ def build_action_plan(session):
                 "The USD can be inspected and the current input revision is explicitly recorded.",
                 {"asset", "inputs"},
             )
-        replay_keys = keys & {"controller_rate", "controller_support"}
+        replay_keys = keys & {"controller_rate", "controller_support", "controller_timing"}
         if replay_keys:
             add(
                 "qualify_replay",
@@ -93,6 +93,14 @@ def build_action_plan(session):
                 "Fix or qualify the controller-replay adapter.",
                 "Logged commands retain their original timing; supported filtering/limiting and physics substeps pass replay tests. Do not change the declared physics step merely to hide a rate mismatch.",
                 replay_keys,
+            )
+        if "controller_processing" in keys:
+            add(
+                "qualify_command_processing",
+                "Toolkit engineering / agent",
+                "Resolve requested versus driver-published commands.",
+                "Use source-backed published targets, or qualify the recorded limiter/filter replay. Existing requested targets are not relabeled as what the robot received.",
+                {"controller_processing"},
             )
         if state == "needs_evidence_description" or "evidence" in keys:
             add(

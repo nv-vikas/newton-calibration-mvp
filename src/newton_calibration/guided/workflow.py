@@ -266,6 +266,7 @@ def _advance(root, session, execute, preview, design_probe):
             "environment": jsonable(env),
             "inputs": inputs,
             "confirmations": session["confirmations"],
+            "command_replay": intake["proposals"].get("command_replay"),
             "recipe_sha256": session["recipe_sha256"],
             "recipe_definition": {key: value for key, value in definition.items() if not key.startswith("_")},
             "input_fingerprint": input_fingerprint,

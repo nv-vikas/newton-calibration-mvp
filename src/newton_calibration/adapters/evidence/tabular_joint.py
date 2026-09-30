@@ -15,6 +15,7 @@ from newton_calibration.core.io import sha256_file
 
 _TIME_FACTORS = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "ns": 1e-9}
 _REQUIRED_SIGNALS = ("command_q", "actual_q", "actual_dq")
+COMMAND_REPLAY_POLICY = "timestamped_position_hold@1"
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,63 @@ class TabularJointEvidence:
                 raise RuntimeError(f"bound evidence episode size changed after binding: {episode.name}")
             if sha256_file(path) != episode.sha256:
                 raise RuntimeError(f"bound evidence episode content changed after binding: {episode.name}")
+
+    def replay_timing(self, dt: float) -> dict[str, Any]:
+        """Check command timing, without fitting or asserting controller equivalence.
+
+        Targets change at the first simulation tick at/after each recorded time.
+        Slower command streams and non-integer rate ratios are supported. Reject
+        sub-tick command spacing instead of silently dropping intermediate targets.
+        This is structural validation of both splits, not holdout model selection.
+        """
+        if not np.isfinite(dt) or dt <= 0:
+            raise ValueError("dt must be finite and greater than zero")
+        streams, blockers = [], []
+        source_signals = [
+            item.source_signal for item in self.spec.signal_bindings if item.canonical_signal == "command_q"
+        ]
+        if len(source_signals) != 1:
+            blockers.append("Exactly one command_q binding is required")
+        else:
+            for episode in self.spec.episodes:
+                frame = self._normalized_frame(episode)
+                for binding in self.spec.joint_bindings:
+                    rows = frame[
+                        (frame["_joint"] == binding.source_joint) & (frame["_source_signal"] == source_signals[0])
+                    ]
+                    if rows.empty:
+                        blockers.append(f"Missing commands: {episode.name}/{binding.source_joint}")
+                        continue
+                    times, _ = self._deduplicate(rows, episode.name, binding.source_joint, "command_q")
+                    intervals = np.diff(times)
+                    minimum = float(intervals.min()) if len(intervals) else None
+                    # Tolerance only covers timestamp floating-point precision,
+                    # not a real command interval shorter than the physics step.
+                    epsilon = max(dt * 1e-9, float(np.spacing(np.max(np.abs(times)))) * 4)
+                    if minimum is not None and minimum + epsilon < dt:
+                        blockers.append(f"Commands faster than the physics step: {episode.name}/{binding.source_joint}")
+                    streams.append(
+                        {
+                            "episode": episode.name,
+                            "joint": binding.source_joint,
+                            "command_samples": len(times),
+                            "minimum_interval_s": minimum,
+                            "median_rate_hz": float(1 / np.median(intervals)) if len(intervals) else None,
+                        }
+                    )
+        if not streams:
+            blockers.append("No command streams available for a timing check")
+        return {
+            "policy": COMMAND_REPLAY_POLICY,
+            "supported": not blockers,
+            "physics_dt_s": dt,
+            "physics_rate_hz": 1 / dt,
+            "transition_rule": "Hold the latest recorded target; never apply a future target early",
+            "transition_quantization_bound_s": dt,
+            "streams": streams,
+            "blockers": blockers,
+            "limitations": "Timing support does not verify command filtering, transport delay or robot controller behavior. Interpolated feedback is not additional real measurements.",
+        }
 
     def inventory(self) -> dict[str, Any]:
         source_joint_union: set[str] = set()
@@ -307,6 +365,12 @@ class TabularJointEvidence:
                         f"episode {source.name!r} is missing required signal {binding.source_joint}/{canonical_signal}"
                     )
                 times, values = self._deduplicate(rows, source.name, binding.source_joint, canonical_signal)
+                if canonical_signal == "command_q" and len(times) > 1:
+                    epsilon = max(dt * 1e-9, float(np.spacing(np.max(np.abs(times)))) * 4)
+                    if float(np.diff(times).min()) + epsilon < dt:
+                        raise ValueError(
+                            "Command timestamps are faster than the physics step; review replay dt rather than discard targets"
+                        )
                 series[(binding.source_joint, canonical_signal)] = (times, values)
                 starts.append(float(times[0]))
                 ends.append(float(times[-1]))
@@ -382,6 +446,8 @@ class TabularJointEvidence:
 
     @staticmethod
     def _zoh(times: np.ndarray, values: np.ndarray, grid: np.ndarray) -> np.ndarray:
+        # Apply changes by timestamp, not by an integer repeat/decimation count.
+        # Repeated entries are held TARGETS, not extra measured robot samples.
         indices = np.searchsorted(times, grid, side="right") - 1
         indices = np.clip(indices, 0, len(values) - 1)
         return values[indices]

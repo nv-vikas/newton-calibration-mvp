@@ -10,6 +10,7 @@
   },
   "guided": {
     "executor": "articulation.position_pd.free_space@3",
+    "command_replay_policy": "timestamped_position_hold@1",
     "default_parameter_families": ["stiffness_scale", "damping_scale"],
     "default_scope_notice": "Start with stiffness and damping for each declared joint group. Add armature, friction, effort or delay explicitly; insufficient evidence never silently removes a requested parameter.",
     "collection_catalog": "mvp1.free-motion-design@1",

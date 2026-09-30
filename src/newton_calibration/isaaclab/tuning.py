@@ -117,6 +117,10 @@ def analyze(
         "requested_parameters_identifiable": {parameter.name for parameter in identifiable} == requested_names,
     }
     warnings = list(asset_errors) + asset_warnings + residual_errors + list(inventory.get("contract_blockers", []))
+    command_replay = adapter.replay_timing(environment.dt) if isinstance(adapter, TabularJointEvidence) else None
+    if command_replay is not None:
+        readiness["command_replay_timing_supported"] = command_replay["supported"]
+        warnings.extend(command_replay["blockers"])
     if isinstance(adapter, _MissingEvidence):
         warnings.append(
             "No real evidence supplied: this is asset/evidence-readiness analysis, not measured-data analysis or calibration."
@@ -183,12 +187,15 @@ def analyze(
         ),
     )
     result.assistance = prepare_assistance(result)
+    if command_replay is not None:
+        result.assistance["command_replay"] = command_replay
     write_json(run_dir / "analysis.json", result)
     status = RunStatus(run_dir, run_id)
     blocked = [name for name, ready in readiness.items() if not ready]
     if blocked:
         status.finish(
-            "analyze", f"{len(identifiable)} parameters proposed; fitting readiness incomplete; "
+            "analyze",
+            f"{len(identifiable)} parameters proposed; fitting readiness incomplete; "
             "plan can prepare evidence collection",
         )
     else:

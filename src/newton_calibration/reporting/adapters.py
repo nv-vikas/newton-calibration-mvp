@@ -142,6 +142,7 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None, s
                     "controller": declared.get("controller"),
                     "tool": declared.get("tool"),
                     "confirmations": intake.get("confirmations", {}),
+                    "command_replay": intake.get("command_replay"),
                     "source": "Recorded user/engineer declarations; not independent hardware verification",
                 },
             )
@@ -226,9 +227,16 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None, s
                 derived(f"{stage}.status", "not_run")
                 derived(f"{stage}.summary", "Not executed in this session revision; see next actions.")
         if not fit:
+            timing = intake.get("command_replay") or {}
+            summary = "Analysis completed. Remaining setup or evidence checks have owners and next actions below; screening alone does not prove parameter identifiability."
+            if timing.get("timing_status") == "supported":
+                summary = (
+                    f"Command timing supported: {timing.get('nominal_command_rate_hz')} Hz nominal commands, "
+                    f"{timing.get('physics_rate_hz')} Hz physics. Controller processing and setup still require their own checks."
+                )
             derived(
                 "discoveries",
-                "Analysis completed. Remaining setup or evidence checks have owners and next actions below; screening alone does not prove parameter identifiability.",
+                summary,
             )
     records["view"] = view
     return write_bundle(

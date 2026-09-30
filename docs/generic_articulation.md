@@ -74,6 +74,13 @@ independent saturation flag or effort measurement; tracking error alone is not
 accepted as saturation evidence. These checks qualify a parameter for the
 recipe—they are not a mathematical identifiability proof.
 
+Timestamped joint targets are held between updates. The command rate may be
+slower than the physics rate (including non-integer ratios); `replay_timing(dt)`
+reports the policy and per-stream timing checks. Analyze blocks command arrivals
+faster than the physics step, and the loader enforces the same restriction.
+Filtering/limiting, clock alignment and hardware-controller equivalence remain
+separate qualification concerns; this does not reconstruct missing sent targets.
+
 ## Output
 
 Generic runs write `newton.calibration.package/v2` with:

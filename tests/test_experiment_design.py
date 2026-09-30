@@ -227,7 +227,9 @@ def test_scoped_five_calls_keep_full_generated_trials_and_missing_untuned_bounds
         env,
         runtime="analytic",
         device="cpu",
-        dt=0.04,
+        # Generated commands are 100 Hz. Preserve every target rather than the
+        # old fixture's silent 4:1 downsampling at a 0.04-second physics step.
+        dt=0.01,
         profile_confirmed=True,
         controller_profile_confirmed=True,
         controller_profile_source="CPU fixture",

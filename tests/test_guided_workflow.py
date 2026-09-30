@@ -253,12 +253,12 @@ def test_partial_guided_report_has_actions_and_verified_unrun_stages(setup, tmp_
     from newton_calibration.reporting.adapters import export_toolkit_run
 
     asset, answers = setup
-    answers["controller"]["command_rate_hz"] = 30  # fixture physics is 50 Hz
+    answers["controller"]["command_rate_hz"] = 100  # faster than this fixture's 50 Hz physics
     root = create(tmp_path, asset, answers)
     monkeypatch.setattr(tuning, "fit", lambda *a, **k: pytest.fail("blocked replay must not fit"))
     result = advance(root, execute=True)
     assert result["fit_allowed"] is False and result["state"] == "needs_information"
-    assert "Do not change dt" in next(q for q in result["questions"] if q["key"] == "controller_rate")["why"]
+    assert "does not discard" in next(q for q in result["questions"] if q["key"] == "controller_rate")["why"]
     run = (root / result["artifacts"]["analyze"]["path"]).parent
     recipe = ARM_RECIPE
     bundle = export_toolkit_run(run, recipe, tmp_path / "report", session_path=root / "session.json")
@@ -283,6 +283,69 @@ def test_partial_guided_report_has_actions_and_verified_unrun_stages(setup, tmp_
     atomic_write_json(snapshot, checkpoint)
     attempted = export_toolkit_run(run, recipe, tmp_path / "attempted-report", session_path=snapshot)
     assert build_report(recipe, attempted)["values"]["fit.status"] is None
+
+
+@pytest.mark.parametrize("physics_rate", [960, 1000])
+def test_slow_commands_fast_physics_can_create_a_plan(setup, tmp_path, physics_rate):
+    asset, answers = setup
+    answers["environment"]["dt"] = 1 / physics_rate
+    answers["controller"]["command_rate_hz"] = 30
+    root = create(tmp_path, asset, answers)
+    result = advance(root)
+    assert result["state"] == "ready_to_fit" and result["fit_allowed"]
+    assert not any(q["key"] == "controller_rate" for q in result["questions"])
+    timing = result["proposals"]["command_replay"]
+    assert timing["timing_status"] == "supported"
+    assert timing["physics_dt_s"] == 1 / physics_rate
+    assert timing["nominal_physics_steps_per_command"] == pytest.approx(physics_rate / 30)
+    intake = read(root / result["artifacts"]["intake"]["path"])
+    assert intake["command_replay"] == timing
+
+
+def test_multirate_five_calls_keep_the_original_physics_dt(setup, tmp_path):
+    asset, answers = setup
+    answers["environment"]["dt"] = 1 / 960
+    answers["controller"]["command_rate_hz"] = 30
+    root = create(tmp_path, asset, answers)
+    result = advance(root, execute=True)
+    assert result["state"] == "completed"
+    plan = read(root / result["artifacts"]["plan"]["path"])
+    assert plan["environment"]["dt"] == 1 / 960
+    assert result["activation_allowed"] is False  # analytic test, never a Newton qualification
+
+
+@pytest.mark.parametrize(
+    "filters,stage,blocked",
+    [
+        ("none", None, False),
+        ("0.4 rad/s slew limiter; requested targets logged", None, True),
+        ("0.4 rad/s slew limiter", "requested", True),
+        ("0.4 rad/s slew limiter", "published", False),
+    ],
+)
+def test_rate_support_does_not_silently_bypass_command_processing(setup, tmp_path, filters, stage, blocked):
+    asset, answers = setup
+    answers["environment"]["dt"] = 1 / 960
+    answers["controller"].update(command_rate_hz=30, filters=filters, command_stage=stage)
+    root = create(tmp_path, asset, answers)
+    result = advance(root)
+    assert not any(q["key"] == "controller_rate" for q in result["questions"])
+    assert any(q["key"] == "controller_processing" for q in result["questions"]) is blocked
+    assert result["fit_allowed"] is not blocked
+    if blocked:
+        assert result["action_plan"]["items"][0]["id"] == "qualify_command_processing"
+        assert "plan" not in result["artifacts"]
+
+
+def test_fast_actual_commands_block_even_if_nominal_rate_claims_slow(setup, tmp_path):
+    asset, answers = setup
+    answers["environment"]["dt"] = 0.03  # actual command timestamps are every .02 seconds
+    answers["controller"]["command_rate_hz"] = 30
+    root = create(tmp_path, asset, answers)
+    result = advance(root)
+    assert not result["fit_allowed"] and "plan" not in result["artifacts"]
+    assert any(q["key"] == "controller_timing" for q in result["questions"])
+    assert result["fit_readiness"]["command_replay_timing_supported"] is False
 
 
 @pytest.mark.parametrize("mutation", ["hash", "revision", "missing_reference", "missing_record"])

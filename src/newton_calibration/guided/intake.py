@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 
 from newton_calibration.adapters.evidence import TabularJointEvidence
-from newton_calibration.adapters.evidence.tabular_joint import inspect_tabular_evidence
+from newton_calibration.adapters.evidence.tabular_joint import COMMAND_REPLAY_POLICY, inspect_tabular_evidence
 from newton_calibration.core.evidence_spec import BoundEvidenceSpec, LongFormSchema, SignalBinding
 from newton_calibration.core.joint_mapping import JointBinding
 from newton_calibration.core.models import EnvironmentSpec, jsonable
@@ -151,17 +151,48 @@ def inspect_inputs(session):
         rate = None
     if rate is not None and (type(rate) not in (int, float) or not math.isfinite(rate) or rate <= 0):
         raise ValueError("Controller command_rate_hz must be finite and positive")
-    # The current replay adapter applies a command every physics step. Do not
-    # claim equivalence for a deployment action rate it cannot yet reproduce.
-    if rate and not math.isclose(float(rate), 1 / env.dt, rel_tol=1e-7):
+    # A target may span many physics ticks; equality of the rates is not required.
+    # The evidence adapter checks actual timestamps below (including jitter).
+    if rate and float(rate) > (1 / env.dt) * (1 + 1e-9):
         questions.append(
             question(
                 "controller_rate",
-                "Match the replay command rate to the declared controller.",
-                "Toolkit engineering must qualify replay of the recorded command timing at the declared physics step, including applicable filtering/limiting. Do not change dt merely to hide this mismatch or request more robot data for this software gap.",
+                "The declared commands are faster than the current simulation updates.",
+                "This replay does not discard intermediate targets. Review a sufficiently fine physics timestep and create a new baseline; slower command rates do not need to match the physics rate.",
                 blocks="fit",
             )
         )
+    filters = controller.get("filters")
+    command_stage = controller.get("command_stage")
+    if command_stage not in (None, "unknown", "requested", "published"):
+        raise ValueError("controller.command_stage must be requested, published or unknown")
+    # Holding a raw requested target is not the same as replaying the limited
+    # target the real driver published. Never silently remove that distinction.
+    if filters not in (None, "", "unknown", "none") and command_stage != "published":
+        questions.append(
+            question(
+                "controller_processing",
+                "Verify which commands were recorded after filtering or limiting.",
+                "The rate difference is supported, but this adapter does not reconstruct controller filters/limiters. Bind actual published targets with command_stage=published and a source, or implement and qualify the recorded processing path. Do not relabel requested targets as published.",
+                blocks="fit",
+            )
+        )
+    proposals["command_replay"] = {
+        "policy": COMMAND_REPLAY_POLICY,
+        "nominal_command_rate_hz": rate,
+        "physics_rate_hz": 1 / env.dt,
+        "physics_dt_s": env.dt,
+        "nominal_physics_steps_per_command": 1 / (env.dt * rate) if rate else None,
+        "timing_status": "awaiting_evidence",
+        "command_processing": (
+            "none_declared"
+            if filters == "none"
+            else "published_targets_declared"
+            if command_stage == "published"
+            else "unverified"
+        ),
+        "notice": "Timing support alone is not controller equivalence or permission to fit.",
+    }
     baselines_missing = [
         key
         for key in ("base_stiffness_by_joint", "base_damping_by_joint", "base_effort_limit_by_joint")
@@ -249,6 +280,20 @@ def inspect_inputs(session):
                 )
                 evidence = TabularJointEvidence(spec, inspection_only=True)
             binding_map = {item.source_joint: item.usd_joint for item in evidence.spec.joint_bindings}
+            timing = evidence.replay_timing(env.dt)
+            proposals["command_replay"].update(
+                timing_status="supported" if timing["supported"] else "unsupported",
+                evidence_timing=timing,
+            )
+            if not timing["supported"]:
+                questions.append(
+                    question(
+                        "controller_timing",
+                        "Resolve command timestamp replay limitations.",
+                        "; ".join(timing["blockers"]),
+                        blocks="fit",
+                    )
+                )
             if env.joint_map != binding_map:
                 questions.append(
                     question(
