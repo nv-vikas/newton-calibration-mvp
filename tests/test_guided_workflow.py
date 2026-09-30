@@ -242,6 +242,72 @@ def test_new_revision_clears_current_outputs_but_preserves_them_in_history(setup
         assert field not in changed
     assert Path(completed["customer_report"]).is_file()
     assert changed["history"][-1]["artifacts"]["report"] == completed["artifacts"]["report"]
+    assert completed["action_plan"]["items"][0]["id"] == "review_result"
+    assert changed["action_plan"]["basis_revision"] == changed["revision"]
+    assert all(item["id"] != "review_result" for item in changed["action_plan"]["items"])
+
+
+def test_partial_guided_report_has_actions_and_verified_unrun_stages(setup, tmp_path, monkeypatch):
+    from newton_calibration.guided.catalog import ARM_RECIPE
+    from newton_calibration.reporting import build_report, render_report
+    from newton_calibration.reporting.adapters import export_toolkit_run
+
+    asset, answers = setup
+    answers["controller"]["command_rate_hz"] = 30  # fixture physics is 50 Hz
+    root = create(tmp_path, asset, answers)
+    monkeypatch.setattr(tuning, "fit", lambda *a, **k: pytest.fail("blocked replay must not fit"))
+    result = advance(root, execute=True)
+    assert result["fit_allowed"] is False and result["state"] == "needs_information"
+    assert "Do not change dt" in next(q for q in result["questions"] if q["key"] == "controller_rate")["why"]
+    run = (root / result["artifacts"]["analyze"]["path"]).parent
+    recipe = ARM_RECIPE
+    bundle = export_toolkit_run(run, recipe, tmp_path / "report", session_path=root / "session.json")
+    report = build_report(recipe, bundle)
+    assert report["values"]["action_plan"]["items"][0]["id"] == "qualify_replay"
+    assert report["values"]["action_plan"]["data_collection"]["status"] == "deferred"
+    assert all(report["values"][f"{step}.status"] == "not_run" for step in ("plan", "fit", "validate", "write"))
+    assert report["values"]["baseline_error"] is None and report["values"]["activation_allowed"] is None
+    html = render_report(report, tmp_path / "partial.html").read_text()
+    assert "Analysis complete. Review the next actions." in html
+    assert "Done when:" in html and "No new robot data requested yet" in html
+    assert '<details class="warning">' in html
+    no_session = export_toolkit_run(run, recipe, tmp_path / "without-session")
+    assert build_report(recipe, no_session)["values"]["fit.status"] is None
+
+    # An attempted step with no result must remain unknown, not "not run".
+    from newton_calibration.core.io import atomic_write_json
+
+    checkpoint = read(root / "session.json")
+    checkpoint["events"].append({"revision": checkpoint["revision"], "event": "fit:started_or_resumed"})
+    snapshot = tmp_path / "attempted.json"
+    atomic_write_json(snapshot, checkpoint)
+    attempted = export_toolkit_run(run, recipe, tmp_path / "attempted-report", session_path=snapshot)
+    assert build_report(recipe, attempted)["values"]["fit.status"] is None
+
+
+@pytest.mark.parametrize("mutation", ["hash", "revision", "missing_reference", "missing_record"])
+def test_reporting_rejects_mismatched_session_checkpoint(setup, tmp_path, mutation):
+    from newton_calibration.core.io import atomic_write_json
+    from newton_calibration.guided.catalog import ARM_RECIPE
+    from newton_calibration.reporting import ReportError
+    from newton_calibration.reporting.adapters import export_toolkit_run
+
+    root = create(tmp_path, *setup)
+    result = advance(root)
+    run = (root / result["artifacts"]["analyze"]["path"]).parent
+    checkpoint = read(root / "session.json")
+    if mutation == "hash":
+        checkpoint["artifacts"]["analyze"]["sha256"] = "0" * 64
+    elif mutation == "revision":
+        checkpoint["revision"] += 1
+    elif mutation == "missing_reference":
+        del checkpoint["artifacts"]["plan"]
+    else:
+        checkpoint["artifacts"]["fit"] = {"sha256": "0" * 64}
+    snapshot = tmp_path / "mismatched.json"
+    atomic_write_json(snapshot, checkpoint)
+    with pytest.raises(ReportError, match="Guided session"):
+        export_toolkit_run(run, ARM_RECIPE, tmp_path / "bad-report", session_path=snapshot)
 
 
 def test_status_can_be_read_during_active_fit(setup, tmp_path):

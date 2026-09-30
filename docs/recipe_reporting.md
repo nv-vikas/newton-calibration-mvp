@@ -42,6 +42,7 @@ bundle = export_toolkit_run(
     recipe_path=recipe,
     destination="output/my-report-revision-1",  # new directory
     package_dir="packages/my-package",         # omit when no package was written
+    session_path="runs/my-session/session.json",  # optional guided checkpoint
 )
 model = build_report(recipe, bundle)
 render_report(model, "output/my-report-revision-1/report.html")
@@ -56,6 +57,27 @@ Partial runs render with missing facts and unknown stages. Missing records do
 not prove a stage was never attempted: `unknown` and `not_run` are distinct.
 The presence of an analysis result means analysis completed; failed readiness
 checks prevent fitting and do not turn the analysis itself into a failed call.
+
+With `session_path`, the exporter verifies artifact hashes and the analyzed
+intake's session ID/revision before deriving an **action plan**. The customer
+view shows prioritized owners, actions, done-when criteria and the collection
+decision; the full warning list is behind a disclosure. The recipe declares
+`action_plan` as an optional object, so direct five-call and older producers are
+still supported. All advice is proposed work, never a completed calibration fact.
+
+The matching checkpoint's current-revision event history can establish that a
+later stage has not run. Without that history, missing results stay `unknown`;
+an attempted stage with no result is not relabeled `not_run`. Reports and downloads
+include the checkpoint snapshot and a source-linked advice projection. This is
+consistency checking, not producer authentication. Review snapshots for private
+paths and setup information before sharing them.
+
+An analysis-only report can be exported the same way: omit `package_dir`, point
+`run_dir` at the directory containing `analysis.json` and `guided_intake.json`,
+and provide the matching `session_path`. This is read-only reporting: it does not
+resume fitting, change confirmations, or generate new physics results. A changed
+reporting recipe requires a fresh report directory/binding; retain the original
+run's recipe snapshot so a presentation refresh cannot rewrite execution history.
 
 The adapter selects held-out `position_rmse_rad` for the customer comparison.
 The optimizer's weighted loss and the validation gate results are shown

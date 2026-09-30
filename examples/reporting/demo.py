@@ -46,7 +46,7 @@ def make_demo(destination):
     for stage, summary in descriptions.items():
         facts[f"{stage}.status"] = "not_run"
         facts[f"{stage}.summary"] = summary
-    assert set(facts) == {field["id"] for field in recipe["reporting"]["fields"]}
+    assert set(facts) == {field["id"] for field in recipe["reporting"]["fields"] if field["required"]}
     return write_bundle(
         RECIPE,
         destination,

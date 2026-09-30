@@ -7,7 +7,7 @@ from pathlib import Path
 from .report import ReportError, _json, digest, load_recipe, write_bundle
 
 
-def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
+def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None, session_path=None):
     """Snapshot available five-call records. Absent records remain unreported.
 
     status.json is deliberately not a source: it is a cosmetic progress surface.
@@ -74,6 +74,43 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
     def derived(key, value):
         view[key] = value
         bind(key, "view", "/" + key)
+
+    checkpoint = None
+    if session_path is not None:
+        raw = Path(session_path).read_bytes()
+        checkpoint = _json(raw)
+        if not isinstance(checkpoint, dict) or checkpoint.get("schema") != "newton.guided-session/v1":
+            raise ReportError("Expected a guided session snapshot")
+        refs = checkpoint.get("artifacts", {})
+        if not isinstance(refs, dict) or not all(isinstance(ref, dict) for ref in refs.values()):
+            raise ReportError("Guided session artifact references must be objects")
+        if not isinstance(checkpoint.get("events", []), list) or not all(
+            isinstance(event, dict) for event in checkpoint.get("events", [])
+        ):
+            raise ReportError("Guided session events must be an array of records")
+        for stage, record in {
+            "analyze": "analysis",
+            "intake": "guided_intake",
+            "plan": "plan",
+            "fit": "fit",
+            "validate": "validation",
+            "write": "manifest",
+        }.items():
+            if (stage in refs or record in records) and (
+                record not in records or refs.get(stage, {}).get("sha256") != original_hashes.get(record)
+            ):
+                raise ReportError(f"Guided session does not match saved {stage} record")
+        if (
+            not analysis
+            or not intake
+            or (
+                checkpoint.get("session_id") != intake.get("session_id")
+                or checkpoint.get("revision") != intake.get("revision")
+            )
+        ):
+            raise ReportError("Guided session revision does not match the analyzed inputs")
+        records["guided_session"] = {**checkpoint, "run_id": run_id}
+        view["source_sha256"]["guided_session"] = digest(raw)
 
     for key in tuple(view):
         if key not in {"adapter", "run_id", "source_sha256"}:
@@ -161,6 +198,38 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None):
             "outputs",
             {"manifest": manifest, "notice": "This report is not a substitute for package-loader verification."},
         )
+    if checkpoint is not None:
+        # Compute advice from the immutable snapshot, never from status.json or
+        # expected recipe results. No readiness or activation decision is changed.
+        from newton_calibration.guided.actions import build_action_plan
+
+        try:
+            actions = build_action_plan(checkpoint)
+        except (TypeError, KeyError, AttributeError) as exc:
+            raise ReportError("Guided session advice inputs are malformed") from exc
+        declared = {field["id"] for field in recipe["reporting"]["fields"]}
+        if "action_plan" in declared:
+            derived("action_plan", actions)
+        derived("next_action", actions["summary"])
+        events = [
+            event for event in checkpoint.get("events", []) if event.get("revision") == checkpoint.get("revision")
+        ]
+        for stage in ("plan", "fit", "validate", "write"):
+            attempted = any(str(event.get("event", "")).startswith(stage + ":") for event in events)
+            if (
+                events
+                and not attempted
+                and stage not in checkpoint.get("artifacts", {})
+                and checkpoint.get("active_step") not in {stage, "plan_collection" if stage == "plan" else stage}
+                and f"{stage}.status" not in facts
+            ):
+                derived(f"{stage}.status", "not_run")
+                derived(f"{stage}.summary", "Not executed in this session revision; see next actions.")
+        if not fit:
+            derived(
+                "discoveries",
+                "Analysis completed. Remaining setup or evidence checks have owners and next actions below; screening alone does not prove parameter identifiability.",
+            )
     records["view"] = view
     return write_bundle(
         recipe_path, destination, run_id=run_id, execution_kind="public_api", records=records, facts=facts

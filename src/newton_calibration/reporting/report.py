@@ -166,6 +166,52 @@ def _valid(value: Any, kind: str) -> bool:
     }[kind]()
 
 
+def _validate_action_plan(value: Any) -> None:
+    """Reject malformed advice rather than rendering it as a completion claim."""
+
+    def nonempty(item):
+        return isinstance(item, str) and bool(item.strip())
+
+    if (
+        not isinstance(value, dict)
+        or value.get("schema") != "newton.guided-actions/v1"
+        or type(value.get("basis_revision")) is not int
+        or value["basis_revision"] < 1
+        or not all(nonempty(value.get(key)) for key in ("basis_state", "summary", "notice"))
+        or value.get("analysis_status") not in {"completed", "not_run"}
+    ):
+        raise ReportError("Invalid action_plan identity or status")
+    collection = value.get("data_collection")
+    if (
+        not isinstance(collection, dict)
+        or collection.get("status") not in {"not_assessed", "deferred", "needed", "not_requested"}
+        or not nonempty(collection.get("message"))
+    ):
+        raise ReportError("Invalid action_plan collection decision")
+    items, seen = value.get("items"), set()
+    if not isinstance(items, list) or not items:
+        raise ReportError("action_plan requires proposed next actions")
+    for priority, item in enumerate(items, 1):
+        if (
+            not isinstance(item, dict)
+            or not all(nonempty(item.get(key)) for key in ("id", "owner", "action", "done_when"))
+            or item["id"] in seen
+            or not _ID.fullmatch(item["id"])
+            or type(item.get("priority")) is not int
+            or item["priority"] != priority
+            or item.get("status") != "proposed"
+        ):
+            raise ReportError("Invalid action_plan item")
+        for key in ("source_questions", "depends_on"):
+            if not isinstance(item.get(key), list) or not all(nonempty(x) for x in item[key]):
+                raise ReportError("Invalid action_plan references")
+        if not set(item["depends_on"]) <= seen:
+            raise ReportError("action_plan dependencies must precede the dependent action")
+        seen.add(item["id"])
+    if value["summary"] != items[0]["action"]:
+        raise ReportError("action_plan summary must name its first action")
+
+
 def build_report(recipe_path: str | Path, bundle_path: str | Path) -> dict:
     """Resolve declared facts from hash-checked records; missing facts stay missing.
 
@@ -230,6 +276,8 @@ def build_report(recipe_path: str | Path, bundle_path: str | Path) -> dict:
         if value is None and field["required"]:
             issues.append(f"Not recorded: {field['label']}")
         values[key] = value
+    if values.get("action_plan") is not None:
+        _validate_action_plan(values["action_plan"])
     before, after = values["baseline_error"], values["tuned_error"]
     if any(v is not None and v < 0 for v in (before, after)):
         raise ReportError("Error metrics must be non-negative")
@@ -334,6 +382,7 @@ def render_report(model: dict, output: str | Path) -> Path:
         return esc(json.dumps(value, indent=2, ensure_ascii=False) if isinstance(value, (dict, list)) else value)
 
     reduction = model["reduction_pct"]
+    actions = values.get("action_plan")
     amount = "—" if reduction is None else f"{abs(reduction):.1f}%"
     direction = "Comparison unavailable" if reduction is None else ("lower error" if reduction >= 0 else "higher error")
     outcome = (
@@ -341,6 +390,8 @@ def render_report(model: dict, output: str | Path) -> Path:
         if reduction is None
         else ("Closer to the measured motion." if reduction > 0 else "The motion gap did not improve.")
     )
+    if actions and values.get("analyze.status") == "completed" and values.get("fit.status") == "not_run":
+        outcome = "Analysis complete. Review the next actions."
     provenance_note = {
         "synthetic": "SYNTHETIC EXAMPLE · Not a robot result",
         "legacy_import": "EXPERIMENTAL IMPORT · Not five completed public API calls",
@@ -399,6 +450,26 @@ def render_report(model: dict, output: str | Path) -> Path:
             + "".join(f"<li>{esc(issue)}</li>" for issue in model["issues"])
             + "</ul></aside>"
         )
+        if actions:
+            issue_html = (
+                '<details class="warning"><summary>Report incomplete · later results are not yet recorded</summary><ul>'
+                + "".join(f"<li>{esc(issue)}</li>" for issue in model["issues"])
+                + "</ul></details>"
+            )
+    action_html = ""
+    if actions:
+        rows = "".join(
+            f'<article class="action-item"><span class="step">{item["priority"]:02d}</span>'
+            f'<div><p class="eyebrow">{esc(item["owner"])}</p><h3>{esc(item["action"])}</h3>'
+            f"<p><b>Done when:</b> {esc(item['done_when'])}</p></div></article>"
+            for item in actions["items"]
+        )
+        action_html = (
+            '<section class="action-plan"><p class="eyebrow">WHAT TO DO NEXT</p>'
+            "<h2>A clear owner. A concrete next step.</h2>"
+            f'<p class="collection-decision">{esc(actions["data_collection"]["message"])}</p>'
+            f'<div class="action-list">{rows}</div><small>{esc(actions["notice"])}</small></section>'
+        )
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zipped:
         for record in model["records"].values():
@@ -435,10 +506,10 @@ def render_report(model: dict, output: str | Path) -> Path:
 <div class="context"><article><p class="eyebrow">01 / PROVIDED</p><p>{text("inputs")}</p></article>
 <article><p class="eyebrow">02 / LEARNED FROM THE RECORDS</p><p>{text("discoveries")}</p></article>
 <article><p class="eyebrow">03 / HELD-OUT CHECK</p><p>{validation_status}</p><small>Motion validation ≠ real-task transfer</small></article></div></section>
-{issue_html}<section><p class="eyebrow">FIVE STAGES · WHAT WAS RECORDED</p><h2>The run, at a glance.</h2>
+{action_html}{issue_html}<section><p class="eyebrow">FIVE STAGES · WHAT WAS RECORDED</p><h2>The run, at a glance.</h2>
 <div class="stages">{"".join(cards)}</div><p class="execution">{text("execution_note")}</p></section>
 {('<section><p class="eyebrow">SEE THE EVIDENCE</p><h2>Measured vs. simulated.</h2><div class="media-grid">' + media + "</div></section>") if media else ""}
-<section class="next"><p class="eyebrow">WHAT SHOULD HAPPEN NEXT?</p><h2>{text("next_action")}</h2></section>
+{('<section class="next"><p class="eyebrow">WHAT SHOULD HAPPEN NEXT?</p><h2>' + text("next_action") + "</h2></section>") if not actions else ""}
 <details class="audit"><summary>Traceability and reporting contract</summary>
 <p>Run: {esc(model["run_id"])} · Recipe: {esc(model["recipe"]["id"])}</p>
 <p>Recipe SHA-256: <code>{esc(model["recipe"]["_sha256"])}</code></p>

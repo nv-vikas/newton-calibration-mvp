@@ -346,7 +346,9 @@ def _advance(root, session, execute, preview, design_probe):
     package_dir = (root / session["artifacts"]["write"]["path"]).parent
     if "report" not in session["artifacts"]:
         report_dir = attempt / "reports" / uuid.uuid4().hex[:12]
-        bundle = export_toolkit_run(plan.workdir, ARM_RECIPE, report_dir, package_dir=package_dir)
+        bundle = export_toolkit_run(
+            plan.workdir, ARM_RECIPE, report_dir, package_dir=package_dir, session_path=root / "session.json"
+        )
         model = build_report(ARM_RECIPE, bundle)
         render_report(model, report_dir / "report.html")
         remember(root, session, "report", bundle)

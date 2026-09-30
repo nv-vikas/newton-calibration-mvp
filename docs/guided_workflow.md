@@ -63,6 +63,42 @@ items were reviewed, e.g. `"confirm": ["mapping", "controller", "tool", "bounds"
 Record the actual verifier, not an agent-generated identity. These are attributed
 assertions, not an authentication system or hardware authorization.
 
+## After Analyze: what do I do next?
+
+Analysis can complete while fitting is not ready. Every newly saved session has
+an `action_plan` and a short `next_action`; the CLI displays priorities, owners
+and **done-when** criteria instead of an undifferentiated warning list.
+Detailed input questions remain in JSON and the interactive wizard.
+
+For example, when existing joint recordings are usable for inspection but replay
+timing and setup confirmation are unresolved:
+
+| Priority | Owner | Action | Done when |
+|---|---|---|---|
+| 1 | Toolkit engineering / agent | Qualify the replay adapter | Original command timing and applicable limiter/filter behavior are tested at the declared physics step. |
+| 2 | Agent | Prepare the configuration review sheet | Proposed simulation gains, limits, bounds and assumptions cite their sources; unknowns remain explicit. |
+| 3 | Robot engineer, guided by agent | Review unresolved setup facts | Joint mapping, real controller and tool/payload declarations name a verifier and source. |
+| 4 | Toolkit | Re-analyze existing recordings | All gates pass before a fitting plan is locked; otherwise the next specific gap is reported. |
+
+**Data collection: deferred.** First address the replay/setup questions. Do not
+ask the engineer to repeat collection just because software cannot replay it yet.
+Do not alter the declared physics timestep merely to hide a rate mismatch.
+The current adapter's multirate limitation remains; this action list does not fix it.
+
+The data decision can be `not_assessed`, `deferred`, `needed`, or `not_requested`.
+Missing/insufficient evidence leads to targeted collection, subject to setup and
+operator review. Unreadable existing evidence leads to interpretation first.
+Screening eligible parameters is not proof that their values are identifiable.
+
+Agents read `action_plan.items`: stable ID, priority, owner, action, `done_when`,
+`source_questions`, `depends_on`, and `status: proposed`. Actions are derived from
+the current session revision; they are **advice, not a task executor or completion
+record**. Only the existing readiness checks allow progress. Fitting still needs
+an explicit execution request; hardware motion is never authorized by this list.
+Older saved sessions acquire the new list on their next review/advance. Read-only
+`status` does not rewrite them. A recipe digest change still requires a reviewed
+new session revision rather than silently reusing an old fitting plan.
+
 ## What happens when evidence is missing?
 
 1. **Analyze completes** with evidence needs; fitting remains unavailable.
@@ -126,7 +162,7 @@ snapshot = guided.status("runs/my-arm")
 
 Every CLI operation also supports `--json` except the interactive wizard. The
 structured result has `questions`, `proposals`, `scope`, `evidence_needs`,
-`fit_readiness`, artifact references and an explicit next state.
+`fit_readiness`, `action_plan`, artifact references and an explicit next state.
 
 ### Answer sections
 

@@ -18,6 +18,12 @@ tuning**, supply what you have, and leave unknowns unresolved. The guide inspect
 the inputs and asks for what is missing. Grasp and insertion are listed as
 planned, not executable recipes.
 
+**After Analyze, you get an action list—not just warnings:** who acts next,
+what they must provide or fix, and how completion is checked. The guide explicitly
+says whether new robot data is needed, deferred, or not currently requested.
+A controller-replay software gap does not automatically trigger recollection.
+[See the post-analysis experience →](docs/guided_workflow.md#after-analyze-what-do-i-do-next)
+
 | I want to… | Read / run |
 |---|---|
 | Start with a robot and a goal, with or without real data | [Guided workflow](docs/guided_workflow.md) |

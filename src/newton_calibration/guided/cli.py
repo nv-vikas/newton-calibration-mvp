@@ -58,8 +58,18 @@ def describe(state):
         lines.append("Analysis: completed. This does not mean fitting is ready.")
     if state.get("scope"):
         lines.append("Requested parameters: " + ", ".join(state["scope"]))
-    for item in state.get("questions", []):
-        lines.extend([f"\n• {item['question']} [{item['key']}]", "  " + item["why"]])
+    if state.get("action_plan"):
+        actions = state["action_plan"]
+        lines.append("\nWhat to do next:")
+        for item in actions["items"]:
+            lines.extend(
+                [f"{item['priority']}. {item['action']} — {item['owner']}", f"   Done when: {item['done_when']}"]
+            )
+        lines.append("\nData collection: " + actions["data_collection"]["message"])
+        lines.append("Detailed input questions remain available with --json or guide wizard.")
+    else:
+        for item in state.get("questions", []):
+            lines.extend([f"\n• {item['question']} [{item['key']}]", "  " + item["why"]])
     if state.get("collection"):
         result = state["collection"]
         lines.extend(

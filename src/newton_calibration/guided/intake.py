@@ -158,7 +158,7 @@ def inspect_inputs(session):
             question(
                 "controller_rate",
                 "Match the replay command rate to the declared controller.",
-                "This guided MVP1 adapter supports one command per physics step; configure dt=1/rate or bind a future multirate adapter.",
+                "Toolkit engineering must qualify replay of the recorded command timing at the declared physics step, including applicable filtering/limiting. Do not change dt merely to hide this mismatch or request more robot data for this software gap.",
                 blocks="fit",
             )
         )

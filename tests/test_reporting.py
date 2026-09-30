@@ -46,6 +46,45 @@ def test_recipe_has_inputs_motions_and_report_contract():
     assert "insertion" in recipe["execution"]["not_supported"]
 
 
+def add_action_plan(bundle, change=None):
+    from newton_calibration.guided.actions import build_action_plan
+
+    plan = build_action_plan({"revision": 1, "state": "choose_recipe"})
+    if change:
+        change(plan)
+    mutate_record(bundle, lambda record: record.update(action_plan=plan))
+    manifest = json.loads(bundle.read_text())
+    manifest["facts"]["action_plan"] = {"record": "synthetic", "pointer": "/action_plan"}
+    atomic_write_json(bundle, manifest)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda p: p.update(items=[]),
+        lambda p: p["items"][0].update(priority=True),
+        lambda p: p["items"][0].update(status="completed"),
+        lambda p: p["items"][0].update(depends_on=["future_action"]),
+        lambda p: p["items"][0].pop("owner"),
+        lambda p: p["data_collection"].update(status="hardware_approved"),
+        lambda p: p.update(summary="Different action"),
+    ],
+)
+def test_action_plan_is_structurally_checked(bundle, change):
+    add_action_plan(bundle, change)
+    with pytest.raises(ReportError, match="action_plan"):
+        build_report(RECIPE, bundle)
+
+
+def test_action_plan_is_escaped_and_does_not_change_scientific_results(bundle, tmp_path):
+    add_action_plan(bundle, lambda p: p["items"][0].update(owner='<img src=x onerror="bad()">'))
+    model = build_report(RECIPE, bundle)
+    assert model["reduction_pct"] == 50 and model["values"]["activation_allowed"] is False
+    html = render_report(model, tmp_path / "advice.html").read_text()
+    assert "&lt;img src=x" in html and "<img src=x" not in html
+    assert 'class="action-plan"' in html
+
+
 def test_results_are_from_records_not_recipe(bundle, tmp_path):
     first = build_report(RECIPE, bundle)
     assert first["report_complete"]
@@ -246,7 +285,7 @@ def test_adapter_integrates_with_actual_five_calls(tmp_path):
     assert model["values"]["tuned_error"] == validation.calibrated_metrics["position_rmse_rad"]
     assert model["values"]["activation_allowed"] is False
     assert model["values"]["optimizer"]["name"] == "diagonal-cma-es"
-    assert all(key in model["provenance"] for key in model["values"])
+    assert all(key in model["provenance"] for key, value in model["values"].items() if value is not None)
 
 
 def test_imported_facts_have_provenance(bundle):

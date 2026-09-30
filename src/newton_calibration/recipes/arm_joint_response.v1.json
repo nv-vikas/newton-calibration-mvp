@@ -48,6 +48,7 @@
   "reporting": {
     "schema": "newton.calibration.reporting/v1",
     "fields": [
+      {"id": "action_plan", "label": "Prioritized next actions, owners and completion criteria", "stage": "overview", "type": "object", "required": false},
       {"id": "inputs", "label": "What the user supplied", "stage": "analyze", "type": "text", "required": true},
       {"id": "discoveries", "label": "What the evidence revealed", "stage": "analyze", "type": "text", "required": true},
       {"id": "limitations", "label": "What remains unproven", "stage": "analyze", "type": "text", "required": true},
