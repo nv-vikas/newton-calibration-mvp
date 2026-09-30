@@ -8,13 +8,21 @@ question through collection, fitting, validation and the customer report.
 
 | User | Guide |
 |---|---|
-| “What recipes can I run?” | Arm joint tuning is available. Grasp and insertion are planned. |
+| “What recipes can I run?” | Arm joint fitting is available. Grasp and insertion prepare collection specifications only. |
 | “Tune this robot for my task.” | Inspects the USD; proposes joint names and a parameter scope. |
 | “Here is my controller configuration and gripper setup.” | Records the source; asks only for unresolved details and explicit confirmations. |
 | “I have some recordings.” | Inspects signals, joint mapping and training coverage; reuses sufficient evidence. |
 | “I do not have enough data.” | Prepares supported collection motions once the scene and simulation envelope are known. Requests the exact-command video by default. |
 | “The engineer collected these logs.” | Attaches them to the same session, creates a new revision and rechecks readiness. |
 | “Run calibration.” | Executes the existing guarded five calls. Saves a package and customer report, including failures and limits. |
+
+The scientific-call rows above describe the supported **arm recipe**. For
+`grasp_contact@1` and `peg_insertion@1`, the same `start → provide → run`
+interface prepares a [contact collection bundle](contact_collection.md) and
+stops at `collection_spec_prepared`. It does not call scientific analyze/plan,
+fit, validate or write; all five are explicitly `not_run`. Even `--execute`
+does not enable an unavailable contact fitter or robot execution. Existing
+contact evidence is retained but is not yet parsed/audited by a contact adapter.
 
 All four starting cases converge here: recipe/data supplied or missing, with an
 asset and goal. “Unknown” is a valid intake answer, never a confirmation.

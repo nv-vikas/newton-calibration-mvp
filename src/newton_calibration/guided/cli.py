@@ -15,7 +15,7 @@ from .workflow import advance, provide, review, start, status
 def add_parser(subparsers):
     parser = subparsers.add_parser("guide", help="Guided recipe selection, intake, collection and calibration")
     actions = parser.add_subparsers(dest="guide_action")
-    recipes = actions.add_parser("recipes", help="List available and future recipes")
+    recipes = actions.add_parser("recipes", help="List calibration and collection-only recipes")
     recipes.add_argument("--json", action="store_true")
     begin = actions.add_parser("start", help="Start with a USD and task goal; other inputs may be unknown")
     begin.add_argument("--asset", required=True)
@@ -65,7 +65,9 @@ def describe(state):
         f"Status: {state['state'].replace('_', ' ')}",
     ]
     if state.get("analysis_status"):
-        lines.append("Analysis: completed." if state.get("fit_allowed") else "Analysis: completed; fitting is not ready.")
+        lines.append(
+            "Analysis: completed." if state.get("fit_allowed") else "Analysis: completed; fitting is not ready."
+        )
     if state.get("scope"):
         lines.append("Requested parameters: " + ", ".join(state["scope"]))
     # Derive from this snapshot; old saved plans may predate the user/work split.
@@ -85,6 +87,16 @@ def describe(state):
                 "Simulation proposals only. Operator approval is still required.",
             ]
         )
+    if state.get("collection_spec"):
+        spec = state["collection_spec"]
+        lines.extend(
+            [
+                f"\nLab checklist: {spec['checklist']}",
+                f"Proposed trials: {spec['core_trial_count']} core + {spec['conditional_trial_count']} conditional.",
+                "These are recording templates, not executable motions or collected data.",
+                "Analyze / plan / fit / validate / write: not run. Contact fitting and preview are not implemented.",
+            ]
+        )
     if state.get("customer_report"):
         lines.extend(
             [
@@ -101,7 +113,7 @@ def describe(state):
 def wizard(directory=None):
     """An optional terminal questionnaire. Unknown answers are never guessed."""
     if directory is None:
-        print("Available: Arm joint tuning. Planned, not executable: grasp; insertion.")
+        print("Arm joint tuning: fitting supported. Grasp / insertion: collection-only recipes; no contact fitting.")
         choice = input("Recipe [arm_joint_response@1]: ").strip() or ARM_ID
         asset = input("Robot USD path: ").strip()
         goal = input("What task are you preparing the robot for? ").strip()
@@ -117,7 +129,16 @@ def wizard(directory=None):
     # Each question is offered at most once in this invocation; unknown does not
     # trap a user in an endless loop or become a confirmation.
     offered = set()
-    answer_keys = {"recipe", "controller", "environment", "tool", "collection", "evidence", "joint_bindings"}
+    answer_keys = {
+        "recipe",
+        "controller",
+        "environment",
+        "tool",
+        "collection",
+        "evidence",
+        "joint_bindings",
+        "contact_setup",
+    }
     while True:
         state = run_automatically(directory)
         human_keys = {q["key"] for q in user_requests(state)}

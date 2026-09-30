@@ -15,7 +15,17 @@ from .catalog import get_recipe, question
 from .store import fingerprint, read
 
 CONFIRMATIONS = ("mapping", "controller", "tool", "bounds")
-SECTIONS = {"environment", "controller", "tool", "joint_bindings", "evidence", "collection", "request", "fit_budget"}
+SECTIONS = {
+    "environment",
+    "controller",
+    "tool",
+    "joint_bindings",
+    "evidence",
+    "collection",
+    "request",
+    "fit_budget",
+    "contact_setup",
+}
 
 
 def confirmation_basis(inputs, name, asset_sha256):
@@ -50,6 +60,11 @@ def confirmed(session, name):
 
 def inspect_inputs(session):
     """Static intake and proposals; this is NOT the scientific analyze call."""
+    definition = get_recipe(session["recipe_id"])
+    if definition.get("execution", {}).get("mode") == "collection_only":
+        from newton_calibration.collection.contact import inspect_contact_inputs
+
+        return inspect_contact_inputs(session, definition)
     questions, proposals = [], {}
     inputs = session["inputs"]
     usd = tuning.inspect_usd(session["asset"])

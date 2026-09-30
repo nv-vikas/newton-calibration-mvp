@@ -116,13 +116,15 @@ def create(tmp_path, asset, answers=None, recipe="arm_joint_response@1"):
     return root
 
 
-def test_catalog_truthfully_marks_future_work(setup, tmp_path):
+def test_catalog_truthfully_marks_collection_only_work(setup, tmp_path):
     recipes = list_recipes()
     assert [r["id"] for r in recipes if r["status"] == "available"] == ["arm_joint_response@1"]
+    assert {r["id"] for r in recipes if r["status"] == "collection_only"} == {"grasp_contact@1", "peg_insertion@1"}
     for recipe in ("grasp", "insertion"):
-        with pytest.raises(ValueError, match="not available"):
-            start(asset=setup[0], goal="task", directory=tmp_path / recipe, recipe=recipe)
-        assert not (tmp_path / recipe).exists()
+        state = start(asset=setup[0], goal="task", directory=tmp_path / recipe, recipe=recipe)
+        assert state["workflow_mode"] == "collection_only"
+        assert not state["artifacts"]
+        assert not state["hardware_execution_authorized"]
 
 
 def test_asset_and_goal_only_is_a_guided_start(setup, tmp_path):
@@ -513,7 +515,7 @@ def test_cli_catalog_and_asset_intake(setup, tmp_path, capsys, monkeypatch):
 
     monkeypatch.setattr("sys.argv", ["newton-calibration", "guide", "recipes", "--json"])
     main()
-    assert '"planned"' in capsys.readouterr().out
+    assert '"collection_only"' in capsys.readouterr().out
     monkeypatch.setattr(
         "sys.argv",
         [

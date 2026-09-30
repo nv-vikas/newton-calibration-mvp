@@ -6,17 +6,20 @@ Calibrate a supported robot's simulated joint response using Isaac Lab and
 Newton. Keep the inputs, settings, search and held-out checks together—and
 explain the outcome in a customer report, not a printed configuration file.
 
-**Current product slice: MVP1, free-space arm / unloaded-gripper response.**
+**Current fitting slice: MVP1, free-space arm / unloaded-gripper response.**
 Better trajectory agreement is not proof of grasp, insertion or real-task
-transfer. Experimental extensions are not part of this deliverable.
+transfer. MVP2 grasp and MVP3 insertion now have **collection-only recipes**:
+setup questions, evidence contracts, trial templates and printable lab checklists.
+Contact fitting, automatic contact trajectories and runtime previews are not implemented.
 
 ## Start here
 
 Start the guided terminal experience with `newton-calibration guide`, or connect
 your agent to the same [guided API](docs/guided_workflow.md). Pick **Arm joint
 tuning**, supply what you have, and leave unknowns unresolved. The guide inspects
-the inputs and asks for what is missing. Grasp and insertion are listed as
-planned, not executable recipes.
+the inputs and asks for what is missing. Select `grasp_contact@1` or
+`peg_insertion@1` to prepare contact evidence collection, not to execute fitting.
+[Tomorrow's lab checklist and recipe instructions →](docs/contact_collection.md)
 
 **Continue automatically:** `newton-calibration guide run --session runs/my-arm
 --execute` performs supported preparation, then fitting, validation and packaging
@@ -36,6 +39,7 @@ limiting and setup confirmations remain separate checks.
 | Try the entire guided journey without a robot/GPU | `python examples/guided/demo.py --output output/guided-demo` (synthetic) |
 | Understand the product and the five calls | [Toolkit integration guide](docs/toolkit_guide.md) |
 | Understand what an arm calibration recipe contains | [Reusable arm recipe](src/newton_calibration/recipes/arm_joint_response.v1.json) |
+| Prepare grasp / insertion data collection | [Lab guide](docs/contact_collection.md) · [MVP2 recipe](src/newton_calibration/recipes/grasp_contact.v1.json) · [MVP3 recipe](src/newton_calibration/recipes/peg_insertion.v1.json) |
 | Build a customer report from recorded results | [Reporting developer guide](docs/recipe_reporting.md) |
 | Try reporting without a GPU or robot data | [Synthetic example](examples/reporting/demo.py) · quick start below |
 | Connect my own run format | [Adapter contract](docs/recipe_reporting.md#connect-a-new-producer) |

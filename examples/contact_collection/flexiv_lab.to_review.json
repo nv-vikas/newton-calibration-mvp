@@ -1,0 +1,64 @@
+{
+  "controller": null,
+  "tool": {
+    "identity": "Flexiv Grav gripper, per prior user setup description; verify tomorrow's fingers/mounting",
+    "payload": "MVP2 holds the peg during the task; MVP3 begins with peg held. Actual mass/TCP settings unconfirmed.",
+    "source": "User-described Flexiv setup; not a readback or operator confirmation"
+  },
+  "contact_setup": {
+    "geometry": {
+      "object_id": "Planned peg corresponding to Peg_25 asset; physical identity and measured dimensions require confirmation",
+      "object_material_finish": null,
+      "object_mass_kg": null,
+      "measured_dimensions_and_uncertainty": null,
+      "finger_geometry_material": null,
+      "peg_in_gripper_transform": null,
+      "hole_id_and_as_built_dimensions": null,
+      "chamfer_depth_fixture": null,
+      "frame_transforms_and_units": null,
+      "measurement_source": null
+    },
+    "instrumentation": {
+      "signal_mapping_file": null,
+      "clock_mapping_and_uncertainty": null,
+      "native_sample_rates_and_filtering": null,
+      "camera_views_and_calibration": "User can mount an iPhone; fixed view, sync and metric calibration not yet verified",
+      "wrist_sensor_identity": "User reports a wrist sensor is present; model, native exports, calibration and compensation unconfirmed",
+      "wrench_frame_origin_tare_compensation": null,
+      "jaw_force_reference_and_convention": "User will try to obtain a load cell; availability and calibration unconfirmed",
+      "capabilities": {
+        "commands": "unknown",
+        "robot_feedback": "unknown",
+        "gripper": "unknown",
+        "video": "unknown",
+        "wrist_wrench": "unknown",
+        "relative_pose_depth": "unknown",
+        "jaw_normal_force": "unknown",
+        "tangential_force": "unknown",
+        "local_deflection": "unknown"
+      }
+    },
+    "trial_settings": {
+      "condition_values_and_units": null,
+      "actual_deployment_mode": null,
+      "approved_start_pose": null,
+      "approved_speed_acceleration": null,
+      "approved_force_torque_depth_limits": null,
+      "grasp_squeeze_levels": null,
+      "insertion_offsets_tilts_rates": null,
+      "success_jam_timeout_abort_criteria": null,
+      "heldout_conditions_and_seed": null
+    },
+    "operator_review": {
+      "responsible_operator": null,
+      "approved_protocol_reference": null,
+      "stop_and_safe_recovery_procedure": null,
+      "fixture_and_catch_review": null
+    },
+    "upstream": {
+      "mvp1_package_path_and_sha256": null,
+      "mvp2_package_path_and_sha256": null,
+      "current_robot_gripper_configuration_snapshot": null
+    }
+  }
+}

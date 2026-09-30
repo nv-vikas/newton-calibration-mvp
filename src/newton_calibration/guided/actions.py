@@ -15,6 +15,7 @@ def user_requests(session):
             "controller",
             "tool",
             "collection",
+            "contact_setup",
             "confirm.mapping",
             "confirm.controller",
             "confirm.tool",
@@ -94,8 +95,20 @@ def build_action_plan(session):
             "choose_recipe",
             "User, guided by agent",
             "Choose an available calibration recipe.",
-            "The user selects a supported recipe; future grasp/insertion recipes are not executed.",
+            "The user selects a recipe with explicit capability: arm fitting or contact collection-only.",
             {"recipe"},
+        )
+    elif session.get("workflow_mode") == "collection_only":
+        add(
+            "review_contact_collection",
+            "Robot engineer, guided by agent",
+            "Review the collection checklist, available signals and operator-approved protocol.",
+            "Setup facts, numeric conditions, stop limits and independent holdouts are recorded. This does not authorize hardware or enable fitting.",
+            keys,
+        )
+        data_status, data_message = (
+            "deferred",
+            "Collection specification only: reuse qualified existing data; operator review and signal qualification precede any new recording. Contact fitting is not installed.",
         )
     elif state == "completed" or "write" in session.get("artifacts", {}):
         add(

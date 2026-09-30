@@ -24,8 +24,7 @@ def start(*, asset, goal, directory, recipe=None, evidence=None):
     asset = Path(asset).expanduser().resolve()
     if not asset.is_file() or not isinstance(goal, str) or not goal.strip():
         raise ValueError("Provide an existing USD and a task goal")
-    if recipe is not None:
-        get_recipe(recipe)
+    definition = get_recipe(recipe) if recipe is not None else None
     root = Path(directory).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=False)
     session = {
@@ -36,8 +35,9 @@ def start(*, asset, goal, directory, recipe=None, evidence=None):
         "asset": str(asset),
         "asset_sha256": sha256_file(asset),
         "goal": goal,
-        "recipe_id": recipe,
-        "recipe_sha256": get_recipe(recipe)["_sha256"] if recipe else None,
+        "recipe_id": definition["id"] if definition else None,
+        "recipe_sha256": definition["_sha256"] if definition else None,
+        "workflow_mode": definition.get("execution", {}).get("mode", "calibration") if definition else None,
         "inputs": {"evidence": str(Path(evidence).expanduser().resolve()) if evidence else None},
         "confirmations": {},
         "state": "choose_recipe" if recipe is None else "needs_information",
@@ -128,6 +128,7 @@ def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="hum
             "evidence_needs",
             "active_step",
             "continuation",
+            "collection_spec",
         ):
             session.pop(field, None)
         session["last_answers"] = {
@@ -146,6 +147,7 @@ def _intake(root, session):
     if get_recipe(session["recipe_id"])["_sha256"] != session["recipe_sha256"]:
         raise ValueError("Recipe changed. Re-select the recipe to create a new revision")
     intake = inspect_inputs(session)
+    session["workflow_mode"] = "collection_only" if intake.get("collection_only") else "calibration"
     session["questions"] = intake["questions"]
     session["proposals"] = intake["proposals"]
     session["usd_inspection"] = intake["usd"]
@@ -178,7 +180,7 @@ def review(directory):
                 question(
                     "recipe",
                     "Which calibration recipe would you like to run?",
-                    "Arm joint tuning is available; grasp and insertion are planned.",
+                    "Arm joint fitting is available; grasp and insertion support collection specifications only.",
                     blocks="all",
                     example=ARM_ID,
                 )
@@ -229,6 +231,40 @@ def advance(directory, *, execute=False, preview=None, design_probe=None):
 def _advance(root, session, execute, preview, design_probe):
     intake = _intake(root, session)
     session["fit_allowed"] = False
+    if intake.get("collection_only"):
+        from newton_calibration.collection.contact import prepare_collection_bundle
+
+        definition = get_recipe(session["recipe_id"])
+        destination = root / "attempts" / f"revision-{session['revision']:04d}" / "contact_collection"
+        if "collection_spec" in session["artifacts"]:
+            artifact(root, session, "collection_spec")  # Verify the saved manifest digest first.
+        plan = prepare_collection_bundle(destination, session, definition)
+        if (plan["session_id"], plan["session_revision"], plan["recipe_sha256"]) != (
+            session["session_id"],
+            session["revision"],
+            session["recipe_sha256"],
+        ):
+            raise ValueError("Contact collection bundle belongs to a different session, revision or recipe")
+        session.update(
+            state="collection_spec_prepared",
+            activation_allowed=False,
+            fit_allowed=False,
+            hardware_execution_authorized=False,
+            real_robot_commands_sent=False,
+            collection_spec={
+                "workdir": str(destination),
+                "checklist": str(destination / "LAB_CHECKLIST.html"),
+                "core_trial_count": plan["core_trial_count"],
+                "conditional_trial_count": plan["conditional_trial_count"],
+                "scientific_calls": plan["scientific_calls"],
+                "status": "proposal_only",
+                "preview": plan["preview"],
+            },
+        )
+        if "collection_spec" not in session["artifacts"]:
+            remember(root, session, "collection_spec", destination / "bundle.json")
+        save(root, session, "contact_collection_spec_prepared; scientific calls and hardware not executed")
+        return _public(session)
     env = intake["environment"]
     if env is None or any(q["blocks"] == "all" for q in session["questions"]):
         session["state"] = "needs_information"

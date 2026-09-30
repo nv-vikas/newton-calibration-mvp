@@ -25,7 +25,11 @@ locks the same digest. This does not change the underlying calibration-plan
 schema. The recipe's `guided` section selects an installed executor and default
 parameter scope. Other procedural sections are documentation; reporting field
 requirements are enforced by code. Existing Python recipes still own executable
-bounds, losses, optimizers and gates. No grasp/insertion implementation is added.
+bounds, losses, optimizers and gates. Grasp/insertion now have a separate
+`newton.calibration.collection-recipe/v1` contract and collection checklist;
+these do **not** use the scientific report builder or install a fitter. Their
+`reporting.required_sections` specifies the future report obligations, not an
+already-enforced scientific result contract. See [contact collection](contact_collection.md).
 
 ## Run the existing toolkit, then report
 

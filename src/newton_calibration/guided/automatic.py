@@ -15,6 +15,8 @@ _PREPARATION_KEYS = {"environment", "controller", "tool", "joint_bindings", "evi
 
 
 def _prepare(state, simulation_profile):
+    if state.get("workflow_mode") == "collection_only":
+        return None
     if not state.get("recipe_id") or state.get("error") or "fit" in state.get("artifacts", {}):
         return None
     answers, sources, completed = {}, [], []
@@ -96,6 +98,7 @@ def run(
                 "ready_to_fit",
                 "ready_to_resume",
                 "awaiting_operator_review_and_real_data",
+                "collection_spec_prepared",
             }:
                 reason = "workflow_boundary"
                 break
