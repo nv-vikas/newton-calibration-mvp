@@ -60,8 +60,9 @@ checks prevent fitting and do not turn the analysis itself into a failed call.
 
 With `session_path`, the exporter verifies artifact hashes and the analyzed
 intake's session ID/revision before deriving an **action plan**. The customer
-view shows prioritized owners, actions, done-when criteria and the collection
-decision; the full warning list is behind a disclosure. The recipe declares
+view shows only actual user requests and the recorded outcome. Prioritized
+owners, actions, done-when criteria and the collection decision are behind a
+technical disclosure, not presented as customer homework. The recipe declares
 `action_plan` as an optional object, so direct five-call and older producers are
 still supported. All advice is proposed work, never a completed calibration fact.
 

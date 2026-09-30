@@ -68,6 +68,10 @@ def add_action_plan(bundle, change=None):
         lambda p: p["items"][0].pop("owner"),
         lambda p: p["data_collection"].update(status="hardware_approved"),
         lambda p: p.update(summary="Different action"),
+        lambda p: p.update(user_requests="ask"),
+        lambda p: p.update(user_attention_required=False),
+        lambda p: p["user_requests"][0].update(question=""),
+        lambda p: p["user_requests"].append(p["user_requests"][0]),
     ],
 )
 def test_action_plan_is_structurally_checked(bundle, change):
@@ -83,6 +87,19 @@ def test_action_plan_is_escaped_and_does_not_change_scientific_results(bundle, t
     html = render_report(model, tmp_path / "advice.html").read_text()
     assert "&lt;img src=x" in html and "<img src=x" not in html
     assert 'class="action-plan"' in html
+    assert "Your input is needed" in html
+    assert "Toolkit / agent work queue" in html and "WHAT TO DO NEXT" not in html
+
+
+def test_legacy_action_plan_still_renders_without_invented_user_questions(bundle, tmp_path):
+    def legacy(plan):
+        for key in ("user_requests", "user_attention_required", "customer_summary"):
+            plan.pop(key)
+
+    add_action_plan(bundle, legacy)
+    model = build_report(RECIPE, bundle)
+    result = render_report(model, tmp_path / "legacy.html").read_text()
+    assert "Legacy checkpoint" in result
 
 
 def test_results_are_from_records_not_recipe(bundle, tmp_path):

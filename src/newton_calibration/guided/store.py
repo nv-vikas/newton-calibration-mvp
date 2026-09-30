@@ -47,7 +47,7 @@ def locked(directory):
 
 def save(directory, session, event):
     session["action_plan"] = build_action_plan(session)
-    session["next_action"] = session["action_plan"]["summary"]
+    session["next_action"] = session["action_plan"]["customer_summary"]
     session["updated_at"] = utc_now()
     session.setdefault("events", []).append(
         {"at": session["updated_at"], "event": event, "revision": session["revision"], "state": session["state"]}

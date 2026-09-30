@@ -211,7 +211,7 @@ def export_toolkit_run(run_dir, recipe_path, destination, *, package_dir=None, s
         declared = {field["id"] for field in recipe["reporting"]["fields"]}
         if "action_plan" in declared:
             derived("action_plan", actions)
-        derived("next_action", actions["summary"])
+        derived("next_action", actions["customer_summary"])
         events = [
             event for event in checkpoint.get("events", []) if event.get("revision") == checkpoint.get("revision")
         ]

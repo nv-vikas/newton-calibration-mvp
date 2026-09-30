@@ -46,8 +46,10 @@ def test_setup_gap_has_four_owned_actions_not_blanket_recollection():
     assert "No new robot data requested yet" in plan["data_collection"]["message"]
     assert "Do not change" in plan["items"][0]["done_when"]
     output = describe({**session, "action_plan": plan})
-    assert "What to do next:" in output and "Done when:" in output
-    assert "Toolkit engineering / agent" in output and "Robot engineer" in output
+    assert "What to do next:" not in output and "Done when:" not in output
+    assert "Toolkit engineering / agent" not in output
+    assert "confirm.mapping" in output and "confirm.bounds" not in output
+    assert "Your input is needed" in output
 
 
 @pytest.mark.parametrize(

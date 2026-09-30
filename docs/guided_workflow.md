@@ -50,10 +50,10 @@ newton-calibration guide provide --session runs/my-arm \
   --source "Controller config revision and engineer review" \
   --confirmed-by "Engineer who verified the listed confirmations"
 
-# Inspect and prepare collection, or stop at a ready-to-fit plan.
-newton-calibration guide advance --session runs/my-arm
-# Only this explicit request allows fitting, validation and packaging.
-newton-calibration guide advance --session runs/my-arm --execute
+# Automatically prepare what is supported, then stop at a ready-to-fit plan.
+newton-calibration guide run --session runs/my-arm
+# One authorization covers fitting, validation and packaging; no per-step prompts.
+newton-calibration guide run --session runs/my-arm --execute
 # Nonmutating snapshot; works while fitting holds the session's writer lock.
 newton-calibration guide status --session runs/my-arm
 ```
@@ -70,6 +70,42 @@ that case. It cannot confirm mapping, real controller or attached-tool facts.
 This does not override any readiness check or authorize real robot execution.
 
 ### Work the toolkit/agent can finish without asking the operator
+
+`guided.run` executes built-in preparation rather than returning it as user
+homework. It fills **missing** simulation baseline maps from an explicitly supplied
+`--simulation-profile /path/to/profile.json`, selects the installed explicit-PD
+simulation mode when declared real command semantics are compatible, and records
+an agent review of recipe/declared simulation search bounds. It then calls the
+existing guarded workflow. Existing baseline declarations are not overwritten;
+raw USD angular gains are not copied into a radian-based controller. A changed
+setup conservatively invalidates previous setup confirmations.
+
+An explicitly trusted host agent can extend preparation:
+
+```python
+from newton_calibration import guided
+
+result = guided.run(
+    "runs/my-arm", execute=True,
+    simulation_profile="/path/to/known-simulation-profile.json",
+    resolver=my_installed_agent_resolver,  # optional trusted callable
+)
+```
+
+The resolver receives a copy of the session and returns `{"answers": {...},
+"source": "configuration path / revision / evidence"}` or `None`. Answers use
+the same validated `provide` contract. A resolver cannot change the selected
+recipe, declared backend, task scope or fit budget, or confirm hardware facts.
+Recipe and evidence files cannot load Python code. The resolver is not an LLM
+bundled with the toolkit and does not independently authenticate its sources.
+
+Preparation is bounded (six passes by default), detects no progress and checks
+the revision before applying answers. Every applied change records provenance
+and preserves the previous revision. The resulting `continuation` record says
+`completed`, `awaiting_user`, or `toolkit_attention`. The last means an unresolved
+source/software limitation—not a running background job. Invalid source files or
+resolver responses raise errors rather than triggering a fallback fit.
+`advance` remains available as the lower-level deterministic workflow API.
 
 `guided.preflight` offers offline helpers for source-backed preparation:
 
@@ -97,13 +133,16 @@ Historical results are retained; they are not upgraded by these software tests.
 
 ## After Analyze: what do I do next?
 
-Analysis can complete while fitting is not ready. Every newly saved session has
-an `action_plan` and a short `next_action`; the CLI displays priorities, owners
-and **done-when** criteria instead of an undifferentiated warning list.
-Detailed input questions remain in JSON and the interactive wizard.
+Analysis can complete while fitting is not ready. `guide run --execute` continues
+supported work until completion or a real boundary. The customer CLI/report shows
+`action_plan.user_requests`: only unresolved setup facts, recipe/execution choices
+or the operator's real collection. It does not ask the user to implement adapters,
+set simulation defaults or run each scientific call separately.
 
 For example, when existing joint recordings are usable for inspection but the
 driver's command limiting and setup confirmation are unresolved:
+
+The following remains an **internal** work queue, behind technical details:
 
 | Priority | Owner | Action | Done when |
 |---|---|---|---|
@@ -123,10 +162,12 @@ Missing/insufficient evidence leads to targeted collection, subject to setup and
 operator review. Unreadable existing evidence leads to interpretation first.
 Screening eligible parameters is not proof that their values are identifiable.
 
-Agents read `action_plan.items`: stable ID, priority, owner, action, `done_when`,
+Agents can inspect `action_plan.items`: stable ID, priority, owner, action, `done_when`,
 `source_questions`, `depends_on`, and `status: proposed`. Actions are derived from
 the current session revision; they are **advice, not a task executor or completion
-record**. Only the existing readiness checks allow progress. Fitting still needs
+record**. `guided.run` records preparation it actually performs separately in
+`continuation.automatic_preparation`; the five-call artifacts remain the results.
+Only the existing readiness checks allow progress. Fitting still needs
 an explicit execution request; hardware motion is never authorized by this list.
 Older saved sessions acquire the new list on their next review/advance. Read-only
 `status` does not rewrite them. A recipe digest change still requires a reviewed
@@ -187,9 +228,8 @@ session = guided.start(asset="/path/to/robot.usd", goal="Insertion preparation",
 # Agent reads questions/proposals. User or engineer supplies/approves facts.
 session = guided.provide("runs/my-arm", answers, source="Reviewed configuration",
                          confirmed_by="Actual reviewer")
-session = guided.advance("runs/my-arm", preview=bound_preview,
-                         design_probe=bound_probe)  # no fit yet
-session = guided.advance("runs/my-arm", execute=True)
+session = guided.run("runs/my-arm", execute=True, preview=bound_preview,
+                     design_probe=bound_probe)  # automatically continues when ready
 snapshot = guided.status("runs/my-arm")
 ```
 

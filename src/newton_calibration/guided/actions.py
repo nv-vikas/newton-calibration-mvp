@@ -3,6 +3,53 @@
 from __future__ import annotations
 
 
+def user_requests(session):
+    """Only facts/choices requiring a person—not the toolkit's work queue."""
+    if session.get("state") == "completed" or "write" in session.get("artifacts", {}):
+        return []
+    requests = []
+    for item in session.get("questions", []):
+        key = item["key"]
+        if key not in {
+            "recipe",
+            "controller",
+            "tool",
+            "collection",
+            "confirm.mapping",
+            "confirm.controller",
+            "confirm.tool",
+        }:
+            continue
+        if key == "controller" and item.get("why") == "Missing: simulation_mode":
+            continue
+        requests.append({"key": key, "question": item.get("question", key), "why": item.get("why", "")})
+    if session.get("state") == "choose_recipe" and not any(item["key"] == "recipe" for item in requests):
+        requests.append(
+            {
+                "key": "recipe",
+                "question": "Which available recipe would you like to run?",
+                "why": "Recipe selection defines the requested calibration scope.",
+            }
+        )
+    if session.get("state") in {"ready_to_fit", "ready_to_resume"} and session.get("fit_allowed"):
+        requests.append(
+            {
+                "key": "execution",
+                "question": "Authorize simulation fitting when ready.",
+                "why": "This invocation requested preparation only, not execution.",
+            }
+        )
+    if session.get("state") == "awaiting_operator_review_and_real_data":
+        requests.append(
+            {
+                "key": "real_data",
+                "question": "Operator review and real recordings are needed.",
+                "why": "Simulation screening does not authorize real robot motion.",
+            }
+        )
+    return requests
+
+
 def build_action_plan(session):
     """Translate recorded questions into owners, deliverables and completion checks.
 
@@ -175,6 +222,18 @@ def build_action_plan(session):
             {"readiness"},
             tuple(item["id"] for item in items),
         )
+    requests = user_requests(session)
+    if state == "completed":
+        requests = []
+        customer_summary = "Run complete. Results and limitations are recorded."
+    elif "write" in session.get("artifacts", {}) and not session.get("error"):
+        customer_summary = "Calibration results are recorded. Check the validation decision and package restrictions."
+    elif requests:
+        customer_summary = "Your input is needed for the unresolved setup facts or execution choice below."
+    elif state in {"analyzing", "planning", "fitting", "validating", "packaging", "preparing_collection"}:
+        customer_summary = "Toolkit work is running; no input is needed from you."
+    else:
+        customer_summary = "No input is needed from you. Remaining work belongs to the toolkit/agent."
     return {
         "schema": "newton.guided-actions/v1",
         "basis_revision": session.get("revision"),
@@ -182,6 +241,9 @@ def build_action_plan(session):
         "analysis_status": session.get("analysis_status", "not_run"),
         "summary": items[0]["action"],
         "items": items,
+        "user_requests": requests,
+        "user_attention_required": bool(requests),
+        "customer_summary": customer_summary,
         "data_collection": {"status": data_status, "message": data_message},
         "notice": "Proposed next actions, not completed work or hardware authorization.",
     }

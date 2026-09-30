@@ -5,6 +5,8 @@ import json
 import uuid
 from pathlib import Path
 
+from .actions import build_action_plan, user_requests
+from .automatic import run as run_automatically
 from .catalog import ARM_ID, list_recipes
 from .store import read
 from .workflow import advance, provide, review, start, status
@@ -22,7 +24,7 @@ def add_parser(subparsers):
     begin.add_argument("--evidence", help="Existing bound-evidence or intake descriptor JSON")
     begin.add_argument("--session", required=True)
     begin.add_argument("--json", action="store_true")
-    for action in ("review", "status", "provide", "advance", "wizard"):
+    for action in ("review", "status", "provide", "advance", "run", "wizard"):
         sub = actions.add_parser(action)
         sub.add_argument("--session", required=True)
         sub.add_argument("--json", action="store_true")
@@ -36,7 +38,7 @@ def add_parser(subparsers):
                 default="human",
                 help="Agents may review simulation bounds only; never hardware facts",
             )
-        if action == "advance":
+        if action in {"advance", "run"}:
             sub.add_argument("--execute", action="store_true", help="Permit fitting once every readiness check passes")
             sub.add_argument(
                 "--preview-factory",
@@ -45,6 +47,8 @@ def add_parser(subparsers):
             sub.add_argument(
                 "--design-probe-factory", help="Trusted local module:factory using the same initialized scene"
             )
+        if action == "run":
+            sub.add_argument("--simulation-profile", help="Existing toolkit profile for missing simulation baselines")
     return parser
 
 
@@ -58,24 +62,20 @@ def _factory(value):
 def describe(state):
     lines = [
         f"Session: {state['session_id']} · revision {state['revision']}",
-        f"Next: {state['state'].replace('_', ' ')}",
+        f"Status: {state['state'].replace('_', ' ')}",
     ]
     if state.get("analysis_status"):
-        lines.append("Analysis: completed. This does not mean fitting is ready.")
+        lines.append("Analysis: completed." if state.get("fit_allowed") else "Analysis: completed; fitting is not ready.")
     if state.get("scope"):
         lines.append("Requested parameters: " + ", ".join(state["scope"]))
-    if state.get("action_plan"):
-        actions = state["action_plan"]
-        lines.append("\nWhat to do next:")
-        for item in actions["items"]:
-            lines.extend(
-                [f"{item['priority']}. {item['action']} — {item['owner']}", f"   Done when: {item['done_when']}"]
-            )
-        lines.append("\nData collection: " + actions["data_collection"]["message"])
-        lines.append("Detailed input questions remain available with --json or guide wizard.")
-    else:
-        for item in state.get("questions", []):
-            lines.extend([f"\n• {item['question']} [{item['key']}]", "  " + item["why"]])
+    # Derive from this snapshot; old saved plans may predate the user/work split.
+    actions = build_action_plan(state)
+    lines.append("\n" + actions["customer_summary"])
+    for item in actions["user_requests"]:
+        lines.extend([f"• {item['question']} [{item['key']}]", "  " + item["why"]])
+    if state.get("continuation", {}).get("outcome") == "toolkit_attention":
+        lines.append("Stopped at a toolkit/source limitation. No background job is running.")
+    lines.append("Technical work queue and provenance are available with --json.")
     if state.get("collection"):
         result = state["collection"]
         lines.extend(
@@ -92,8 +92,6 @@ def describe(state):
                 f"Held-out validation: {state.get('validation_passed')}; package activation: {state.get('activation_allowed')}",
             ]
         )
-    if state.get("next_action"):
-        lines.append(state["next_action"])
     if state.get("error"):
         lines.append("Attention: " + state["error"]["message"])
     lines.append("No commands have been sent to a real robot.")
@@ -121,11 +119,14 @@ def wizard(directory=None):
     offered = set()
     answer_keys = {"recipe", "controller", "environment", "tool", "collection", "evidence", "joint_bindings"}
     while True:
-        state = advance(directory) if state["recipe_id"] else review(directory)
+        state = run_automatically(directory)
+        human_keys = {q["key"] for q in user_requests(state)}
         remaining = [
             item
             for item in state.get("questions", [])
-            if item["key"] not in offered and (item["key"] in answer_keys or item["key"].startswith("confirm."))
+            if item["key"] in human_keys
+            and item["key"] not in offered
+            and (item["key"] in answer_keys or item["key"].startswith("confirm."))
         ]
         if not remaining:
             break
@@ -159,10 +160,10 @@ def wizard(directory=None):
         state["state"] in {"ready_to_fit", "ready_to_resume"}
         and input("Ready. Run calibration in simulation now? [yes / no]: ").strip().lower() == "yes"
     ):
-        state = advance(directory, execute=True)
+        state = run_automatically(directory, execute=True)
     print(describe(state))
     print(f"Resume: newton-calibration guide wizard --session {json.dumps(str(directory))}")
-    print("Use guide advance to inspect/prepare collection; add --execute only when ready to fit.")
+    print("guide run continues supported preparation; --execute authorizes the simulation workflow once.")
     return state
 
 
@@ -203,5 +204,14 @@ def run(args):
         probe = (
             _factory(args.design_probe_factory) if args.design_probe_factory else getattr(preview, "design_probe", None)
         )
-        state = advance(args.session, execute=args.execute, preview=preview, design_probe=probe)
+        if action == "run":
+            state = run_automatically(
+                args.session,
+                execute=args.execute,
+                simulation_profile=args.simulation_profile,
+                preview=preview,
+                design_probe=probe,
+            )
+        else:
+            state = advance(args.session, execute=args.execute, preview=preview, design_probe=probe)
     print(json.dumps(state, indent=2) if args.json else describe(state))

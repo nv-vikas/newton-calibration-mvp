@@ -210,6 +210,29 @@ def _validate_action_plan(value: Any) -> None:
         seen.add(item["id"])
     if value["summary"] != items[0]["action"]:
         raise ReportError("action_plan summary must name its first action")
+    # Old bundles retain their original advice. New bundles distinguish actual
+    # user requests from the internal engineering queue.
+    audience_fields = {"user_requests", "user_attention_required", "customer_summary"}
+    if audience_fields & value.keys():
+        requests = value.get("user_requests")
+        if (
+            not isinstance(requests, list)
+            or not nonempty(value.get("customer_summary"))
+            or type(value.get("user_attention_required")) is not bool
+            or value["user_attention_required"] != bool(requests)
+        ):
+            raise ReportError("Invalid action_plan user requests")
+        keys = set()
+        for request in requests:
+            if (
+                not isinstance(request, dict)
+                or not nonempty(request.get("key"))
+                or not nonempty(request.get("question"))
+                or not isinstance(request.get("why"), str)
+                or request["key"] in keys
+            ):
+                raise ReportError("Invalid action_plan user request")
+            keys.add(request["key"])
 
 
 def build_report(recipe_path: str | Path, bundle_path: str | Path) -> dict:
@@ -391,7 +414,7 @@ def render_report(model: dict, output: str | Path) -> Path:
         else ("Closer to the measured motion." if reduction > 0 else "The motion gap did not improve.")
     )
     if actions and values.get("analyze.status") == "completed" and values.get("fit.status") == "not_run":
-        outcome = "Analysis complete. Review the next actions."
+        outcome = "Analysis complete. Calibration has not run."
     provenance_note = {
         "synthetic": "SYNTHETIC EXAMPLE · Not a robot result",
         "legacy_import": "EXPERIMENTAL IMPORT · Not five completed public API calls",
@@ -464,11 +487,19 @@ def render_report(model: dict, output: str | Path) -> Path:
             f"<p><b>Done when:</b> {esc(item['done_when'])}</p></div></article>"
             for item in actions["items"]
         )
+        requests = actions.get("user_requests", [])
+        request_html = "".join(f"<li><b>{esc(item['question'])}</b><p>{esc(item['why'])}</p></li>" for item in requests)
+        heading = "Your input is needed" if requests else "No user action requested"
+        if "user_requests" not in actions:
+            heading = "User requests not recorded separately"
+        summary = actions.get("customer_summary", "Legacy checkpoint: user requests were not recorded separately.")
         action_html = (
-            '<section class="action-plan"><p class="eyebrow">WHAT TO DO NEXT</p>'
-            "<h2>A clear owner. A concrete next step.</h2>"
+            '<section class="action-plan"><p class="eyebrow">CUSTOMER STATUS</p>'
+            f"<h2>{heading}</h2><p>{esc(summary)}</p>"
+            + (f"<ul>{request_html}</ul>" if requests else "")
+            + "<details><summary>Toolkit / agent work queue · technical details</summary>"
             f'<p class="collection-decision">{esc(actions["data_collection"]["message"])}</p>'
-            f'<div class="action-list">{rows}</div><small>{esc(actions["notice"])}</small></section>'
+            f'<div class="action-list">{rows}</div><small>{esc(actions["notice"])}</small></details></section>'
         )
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zipped:

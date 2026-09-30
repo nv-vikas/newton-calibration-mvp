@@ -53,7 +53,7 @@ def start(*, asset, goal, directory, recipe=None, evidence=None):
     return review(root)
 
 
-def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="human"):
+def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="human", expected_revision=None):
     """Record answers/provenance; explicit confirmations are tied to setup bytes.
 
     An agent may review simulation-only bounds under its own identity. Mapping,
@@ -74,6 +74,8 @@ def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="hum
     if reviewer_kind == "agent" and set(names) - {"bounds"}:
         raise ValueError("An agent may confirm simulation bounds only, not mapping/controller/tool hardware facts")
     with locked(directory) as (root, session):
+        if expected_revision is not None and session["revision"] != expected_revision:
+            raise RuntimeError("Session revision changed; stale automatic answers were not applied")
         previous = deepcopy(session)
         if "recipe" in answers:
             recipe = get_recipe(answers["recipe"])
@@ -125,6 +127,7 @@ def provide(directory, answers, *, source, confirmed_by=None, reviewer_kind="hum
             "fit_readiness",
             "evidence_needs",
             "active_step",
+            "continuation",
         ):
             session.pop(field, None)
         session["last_answers"] = {

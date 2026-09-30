@@ -268,7 +268,8 @@ def test_partial_guided_report_has_actions_and_verified_unrun_stages(setup, tmp_
     assert all(report["values"][f"{step}.status"] == "not_run" for step in ("plan", "fit", "validate", "write"))
     assert report["values"]["baseline_error"] is None and report["values"]["activation_allowed"] is None
     html = render_report(report, tmp_path / "partial.html").read_text()
-    assert "Analysis complete. Review the next actions." in html
+    assert "Analysis complete. Calibration has not run." in html
+    assert "No user action requested" in html
     assert "Done when:" in html and "No new robot data requested yet" in html
     assert '<details class="warning">' in html
     no_session = export_toolkit_run(run, recipe, tmp_path / "without-session")
@@ -557,4 +558,5 @@ def test_wizard_accepts_unknown_without_looping(setup, tmp_path, monkeypatch):
     result = wizard(root)
     assert result["state"] == "needs_collection_setup"
     assert not result["fit_allowed"]
-    assert not result["confirmations"]
+    assert set(result["confirmations"]) == {"bounds"}
+    assert result["confirmations"]["bounds"]["reviewer_kind"] == "agent"

@@ -106,7 +106,7 @@ def create_fixture(root):
             "duration_s": 12.0,
         },
         "fit_budget": {"generations": 2, "population": 4},
-        "confirm": ["mapping", "controller", "tool", "bounds"],
+        "confirm": ["mapping", "controller", "tool"],
     }
     return asset, answers, evidence
 
@@ -119,7 +119,7 @@ def demo(destination):
     session = guided.start(asset=asset, goal="Prepare an arm for later insertion; fixture only", directory=session_dir)
     print("1.", session["state"], "— arm joint tuning is available; grasp/insertion are planned")
     guided.provide(session_dir, {"recipe": "arm_joint_response@1"}, source="Demo choice")
-    session = guided.advance(session_dir)
+    session = guided.run(session_dir)
     print("2.", session["state"], "— analysis completed; setup questions remain")
     write_json(root / "setup-answers.SYNTHETIC.json", answers)
     guided.provide(
@@ -128,7 +128,7 @@ def demo(destination):
         source="Synthetic fixture definitions",
         confirmed_by="Synthetic test fixture (not a person)",
     )
-    session = guided.advance(session_dir)
+    session = guided.run(session_dir)
     print("3.", session["state"], "—", len(session["collection"]["episodes"]), "motion proposals; no GPU preview")
     attached = {"evidence": deepcopy(evidence), "confirm": ["mapping"]}
     write_json(root / "attach-evidence.SYNTHETIC.json", attached)
@@ -138,9 +138,9 @@ def demo(destination):
         source="Generated synthetic CSVs, never hardware",
         confirmed_by="Synthetic test fixture (not a person)",
     )
-    session = guided.advance(session_dir)
+    session = guided.run(session_dir)
     print("4.", session["state"], "— independent synthetic train/heldout records")
-    session = guided.advance(session_dir, execute=True)
+    session = guided.run(session_dir, execute=True)
     print(
         "5.",
         session["state"],
