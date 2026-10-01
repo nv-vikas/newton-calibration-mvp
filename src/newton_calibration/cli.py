@@ -13,7 +13,7 @@ from newton_calibration.optimizers import list_optimizers
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="newton-calibration", description="Newton calibration MVP1")
+    parser = argparse.ArgumentParser(prog="newton-calibration", description="Newton calibration MVP toolkit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     from newton_calibration.guided.cli import add_parser
     from newton_calibration.guided.cli import run as run_guide

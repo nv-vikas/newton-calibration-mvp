@@ -1,0 +1,4 @@
+interface:
+  display_name: "Newton Calibration"
+  short_description: "Run recipe-guided calibration with traceable evidence"
+  default_prompt: "Use $newton-calibration to prepare and run a supported calibration workflow from my USD, task goal and available evidence."

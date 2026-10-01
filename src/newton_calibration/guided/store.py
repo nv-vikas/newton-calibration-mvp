@@ -26,6 +26,19 @@ def fingerprint(value):
     ).hexdigest()
 
 
+def execution_basis(session):
+    """Bind fitting consent to one input revision and prepared plan."""
+    return fingerprint(
+        {
+            "session_id": session["session_id"],
+            "revision": session["revision"],
+            "inputs": session["inputs"],
+            "confirmations": session["confirmations"],
+            "plan": session.get("artifacts", {}).get("plan"),
+        }
+    )
+
+
 @contextmanager
 def locked(directory):
     directory = Path(directory).resolve()

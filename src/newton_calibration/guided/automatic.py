@@ -65,6 +65,7 @@ def run(
     design_probe=None,
     max_passes=6,
     agent_name="Calibration automation",
+    expected_execution_basis=None,
 ):
     """Do supported preparation and all authorized calls; stop only at a boundary.
 
@@ -92,7 +93,13 @@ def run(
         seen.add(state_key)
         update = _prepare(state, simulation_profile)
         if update is None:
-            state = advance(directory, execute=execute, preview=preview, design_probe=design_probe)
+            state = advance(
+                directory,
+                execute=execute,
+                preview=preview,
+                design_probe=design_probe,
+                expected_execution_basis=expected_execution_basis,
+            )
             if state["state"] in {
                 "completed",
                 "ready_to_fit",
@@ -146,7 +153,13 @@ def run(
     else:
         # Still perform analysis of the last prepared revision; never declare an
         # unanalysed setup complete just because the bounded preparation loop ends.
-        state = advance(directory, execute=execute, preview=preview, design_probe=design_probe)
+        state = advance(
+            directory,
+            execute=execute,
+            preview=preview,
+            design_probe=design_probe,
+            expected_execution_basis=expected_execution_basis,
+        )
     requests = user_requests(state)
     outcome = "completed" if state["state"] == "completed" else "awaiting_user" if requests else "toolkit_attention"
     with locked(directory) as (root, current):

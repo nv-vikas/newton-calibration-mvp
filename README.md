@@ -14,6 +14,13 @@ Contact fitting, automatic contact trajectories and runtime previews are not imp
 
 ## Start here
 
+**Use your existing agent:** open this checkout in Codex and ask
+“Use $newton-calibration with my USD, task goal and available evidence.” The
+checked-in skill and [Agent Starter Kit](docs/agent_starter.md) make recipe
+selection, source-backed preparation and run recovery reusable without prior
+chat history. The trusted host still owns fitting consent and hardware review.
+No LLM or Minjae implementation is bundled.
+
 Start the guided terminal experience with `newton-calibration guide`, or connect
 your agent to the same [guided API](docs/guided_workflow.md). Pick **Arm joint
 tuning**, supply what you have, and leave unknowns unresolved. The guide inspects
@@ -35,6 +42,7 @@ limiting and setup confirmations remain separate checks.
 
 | I want to… | Read / run |
 |---|---|
+| Have an agent guide calibration from my files and goal | [Agent Starter Kit](docs/agent_starter.md) · [verification](docs/agent_starter_verification.md) |
 | Start with a robot and a goal, with or without real data | [Guided workflow](docs/guided_workflow.md) |
 | Try the entire guided journey without a robot/GPU | `python examples/guided/demo.py --output output/guided-demo` (synthetic) |
 | Understand the product and the five calls | [Toolkit integration guide](docs/toolkit_guide.md) |

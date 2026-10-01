@@ -16,7 +16,7 @@ from newton_calibration.reporting.adapters import export_toolkit_run
 from . import codec
 from .catalog import ARM_ID, ARM_RECIPE, get_recipe, list_recipes, question
 from .intake import CONFIRMATIONS, SECTIONS, confirmation_basis, inspect_inputs
-from .store import artifact, fingerprint, locked, read, remember, save
+from .store import artifact, execution_basis, fingerprint, locked, read, remember, save
 
 
 def start(*, asset, goal, directory, recipe=None, evidence=None):
@@ -176,6 +176,7 @@ def review(directory):
     """Get the next questions. Does not execute scientific calls."""
     with locked(directory) as (root, session):
         if session["recipe_id"] is None:
+            session["state"] = "choose_recipe"
             session["questions"] = [
                 question(
                     "recipe",
@@ -200,7 +201,7 @@ def review(directory):
         return _public(session)
 
 
-def advance(directory, *, execute=False, preview=None, design_probe=None):
+def advance(directory, *, execute=False, preview=None, design_probe=None, expected_execution_basis=None):
     """Advance until the next human boundary. `execute=True` permits fitting.
 
     Preview/probe hooks are trusted installed code, supplied explicitly by the
@@ -208,6 +209,8 @@ def advance(directory, *, execute=False, preview=None, design_probe=None):
     driver hook, bypass flag or exploratory mode.
     """
     with locked(directory) as (root, session):
+        if execute and expected_execution_basis is not None and execution_basis(session) != expected_execution_basis:
+            raise RuntimeError("Execution approval is stale; review the changed revision/plan and authorize again")
         if session["recipe_id"] is None:
             session["state"] = "choose_recipe"
             save(root, session, "recipe_selection_required")

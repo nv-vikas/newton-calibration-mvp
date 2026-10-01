@@ -27,6 +27,7 @@ asset-prep = [
 
 [project.scripts]
 newton-calibration = "newton_calibration.cli:main"
+newton-calibration-agent = "newton_calibration.agent_tools:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

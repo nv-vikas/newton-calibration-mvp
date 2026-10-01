@@ -117,7 +117,7 @@ def demo(destination):
     print("SYNTHETIC software-flow demo. No robot or Newton GPU run.")
     session_dir = root / "session"
     session = guided.start(asset=asset, goal="Prepare an arm for later insertion; fixture only", directory=session_dir)
-    print("1.", session["state"], "— arm joint tuning is available; grasp/insertion are planned")
+    print("1.", session["state"], "— arm joint tuning is available; grasp/insertion are collection-only")
     guided.provide(session_dir, {"recipe": "arm_joint_response@1"}, source="Demo choice")
     session = guided.run(session_dir)
     print("2.", session["state"], "— analysis completed; setup questions remain")
